@@ -1,0 +1,5 @@
+numpy
+sentence-transformers
+rank-bm25
+torch
+rouge-score
