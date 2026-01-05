@@ -217,6 +217,9 @@ class FusionEncoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_documents = num_documents
         
+        # Linear projection to standard embedding dim
+        self.query_doc_projector = nn.Linear(embedding_dim * 2, embedding_dim)
+        
         # Context encoder: processes [query, doc] pairs independently
         self.context_encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
@@ -229,62 +232,76 @@ class FusionEncoder(nn.Module):
             num_layers=2
         )
         
-        # Fusion layer: combines encoded contexts
-        self.fusion_layer = nn.Sequential(
-            nn.Linear(embedding_dim * num_documents, hidden_dim),
+        # Attention weights for context importance
+        self.attention_score = nn.Sequential(
+            nn.Linear(embedding_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.Dropout(0.1)
+            nn.Linear(hidden_dim, 1)
         )
         
-        # Attention weights for context importance
-        self.attention_weights = nn.Linear(embedding_dim, 1)
+        # Fusion layer: combines encoded contexts with proper dimensioning
+        self.fusion_layer = nn.Sequential(
+            nn.Linear(embedding_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
     
     def forward(self, query_emb: torch.Tensor, doc_embs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         FiD Forward Pass:
         1. Encode each [query, doc] pair independently
         2. Compute attention weights for each context
-        3. Fuse all contexts
+        3. Fuse all contexts with attention
         
         Args:
-            query_emb: Query embedding [1, embedding_dim]
-            doc_embs: List of document embeddings, each [1, embedding_dim]
+            query_emb: Query embedding [embedding_dim] or [1, embedding_dim]
+            doc_embs: List of document embeddings, each [embedding_dim] or [1, embedding_dim]
         
         Returns:
             fused_repr: Fused representation [1, hidden_dim]
-            attention_weights: Attention scores for each document [num_docs, 1]
+            attention_weights: Attention scores for each document [num_docs]
         """
+        # Ensure query_emb is 1D
+        if query_emb.dim() == 2:
+            query_emb = query_emb.squeeze(0)
+        
         context_encodings = []
         
         # Encode each [query, doc] pair independently
         for doc_emb in doc_embs[:self.num_documents]:
-            # Concatenate query and document
-            context = torch.cat([query_emb, doc_emb], dim=-1).unsqueeze(1)
+            # Ensure doc_emb is 1D
+            if doc_emb.dim() == 2:
+                doc_emb = doc_emb.squeeze(0)
             
-            # Pad/process to embedding_dim
-            if context.shape[-1] > self.embedding_dim:
-                context = context[..., :self.embedding_dim]
-            else:
-                padding = self.embedding_dim - context.shape[-1]
-                context = torch.nn.functional.pad(context, (0, padding))
+            # Concatenate query and document: [2 * embedding_dim]
+            context_pair = torch.cat([query_emb, doc_emb], dim=0)  # [2*384]
             
-            # Encode context
-            encoded = self.context_encoder(context)
-            context_encodings.append(encoded.squeeze(1))
+            # Project to embedding_dim
+            context_proj = self.query_doc_projector(context_pair)  # [384]
+            
+            # Add sequence dimension for transformer
+            context_seq = context_proj.unsqueeze(0).unsqueeze(0)  # [1, 1, 384]
+            
+            # Encode context with transformer
+            encoded = self.context_encoder(context_seq)  # [1, 1, 384]
+            context_encodings.append(encoded.squeeze(0).squeeze(0))  # [384]
         
-        # Stack all context encodings
-        stacked_contexts = torch.stack(context_encodings)  # [num_docs, 1, embedding_dim]
+        # Stack all context encodings: [num_docs, 384]
+        stacked_contexts = torch.stack(context_encodings)
         
-        # Compute attention weights
-        attn_weights = self.attention_weights(stacked_contexts)  # [num_docs, 1, 1]
-        attn_weights = torch.softmax(attn_weights, dim=0)
+        # Compute attention weights: [num_docs, 1]
+        attn_logits = self.attention_score(stacked_contexts)  # [num_docs, 1]
+        attn_weights = torch.softmax(attn_logits, dim=0)  # [num_docs, 1]
         
-        # Weighted fusion of contexts
-        weighted_contexts = stacked_contexts * attn_weights
-        fused_repr = self.fusion_layer(weighted_contexts.flatten())
+        # Weighted sum of contexts: [num_docs, 1] * [num_docs, 384]
+        weighted_contexts = stacked_contexts * attn_weights  # [num_docs, 384]
+        fused_context = torch.sum(weighted_contexts, dim=0)  # [384]
         
-        return fused_repr.unsqueeze(0), attn_weights.squeeze(-1).squeeze(-1)
+        # Pass through fusion layer
+        fused_repr = self.fusion_layer(fused_context)  # [768]
+        
+        return fused_repr.unsqueeze(0), attn_weights.squeeze(-1)  # [1, 768], [num_docs]
 
 
 class FusionDecoder(nn.Module):

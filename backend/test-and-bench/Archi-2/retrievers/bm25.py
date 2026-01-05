@@ -2,6 +2,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from .base import RetrieverModule
 
+
 class BM25RetrieverModule(RetrieverModule):
 
     def __init__(self):

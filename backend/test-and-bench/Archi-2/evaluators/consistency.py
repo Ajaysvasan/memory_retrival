@@ -1,57 +1,36 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any
-from core.retrieved_doc import RetrievedDoc
 from core.metrics import ConsistencyScore
 
 
 class ConsistencyEvaluator:
-    """
-    Consistency evaluation including FiD fusion attention entropy.
-    """
 
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    def evaluate(
-        self,
-        query: str,
-        retrieved_docs: List[RetrievedDoc],
-        fusion_stats: Dict[str, Any]
-    ) -> ConsistencyScore:
-
-        if not retrieved_docs:
-            return ConsistencyScore(0, 0, 0, 0, 0)
-
-        query_emb = self.model.encode(query)
-        doc_embs = [self.model.encode(d.content) for d in retrieved_docs]
+    def evaluate(self, query, docs, fusion_stats):
+        q = self.model.encode(query)
+        d = [self.model.encode(x.content) for x in docs]
 
         semantic = np.mean([
-            np.dot(query_emb, e) /
-            (np.linalg.norm(query_emb) * np.linalg.norm(e) + 1e-8)
-            for e in doc_embs
+            np.dot(q, e) / (np.linalg.norm(q) * np.linalg.norm(e) + 1e-8)
+            for e in d
         ])
 
-        q_tokens = set(query.lower().split())
         lexical = np.mean([
-            len(q_tokens & set(d.content.lower().split())) /
-            len(q_tokens | set(d.content.lower().split()))
-            for d in retrieved_docs
+            len(set(query.split()) & set(x.content.split())) /
+            len(set(query.split()) | set(x.content.split()))
+            for x in docs
         ])
 
-        fusion_consistency = 0.0
-        if fusion_stats.get("attention_weights"):
-            attn = np.array(fusion_stats["attention_weights"])
-            entropy = -np.sum(attn * np.log(attn + 1e-8))
-            fusion_consistency = 1 - entropy / np.log(len(attn))
+        fusion = 0.0
+        if "attention_weights" in fusion_stats:
+            a = np.array(fusion_stats["attention_weights"])
+            fusion = 1 - (-np.sum(a * np.log(a + 1e-8)) / np.log(len(a)))
 
-        overall = 0.4 * semantic + 0.3 * lexical + 0.3 * fusion_consistency
-        variation = np.std(semantic) / (np.mean(semantic) + 1e-8)
+        overall = 0.4 * semantic + 0.3 * lexical + 0.3 * fusion
+        variation = np.std(d) / (np.mean(d) + 1e-8)
 
         return ConsistencyScore(
-            semantic_consistency=float(min(1, semantic)),
-            lexical_consistency=float(min(1, lexical)),
-            fusion_consistency=float(min(1, fusion_consistency)),
-            overall_consistency=float(min(1, overall)),
-            variation_coefficient=float(variation)
+            semantic, lexical, fusion, overall, float(variation)
         )

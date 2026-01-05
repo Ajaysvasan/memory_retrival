@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List
 from core.document import Document
+
 
 class RetrieverModule(ABC):
 

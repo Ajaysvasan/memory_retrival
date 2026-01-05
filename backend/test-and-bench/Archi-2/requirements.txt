@@ -2,5 +2,3 @@ numpy
 torch
 sentence-transformers
 rank-bm25
-transformers
-datasets

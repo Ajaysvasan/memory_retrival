@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class ComplexityMetrics:
     operation: str
     time_complexity: str
     space_complexity: str
     description: str
-    empirical_time: float = 0.0
 
 
 @dataclass

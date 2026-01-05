@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from typing import List, Dict, Any
-from .retrieved_doc import RetrievedDoc
-from .metrics import (
+from core.retrieved_doc import RetrievedDoc
+from core.metrics import (
     ConsistencyScore,
     AccuracyMetrics,
     ComparisonResult,
     ComplexityMetrics,
 )
+
 
 @dataclass
 class EvaluationResult:
