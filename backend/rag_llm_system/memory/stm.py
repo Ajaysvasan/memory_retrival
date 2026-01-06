@@ -2,6 +2,8 @@ from collections import deque
 from datetime import datetime
 from typing import Dict, List
 
+from config.thresholds import CONFIG
+
 
 class ShortTermMemory:
     """Recent conversation context."""
