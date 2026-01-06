@@ -1,0 +1,43 @@
+
+# ============================================================================
+# REQUIREMENTS.txt
+# ============================================================================
+"""
+numpy>=1.21.0
+faiss-cpu>=1.7.0
+sentence-transformers>=2.2.0
+scikit-learn>=1.0.0
+torch>=1.9.0
+"""
+
+# ============================================================================
+# DIRECTORY STRUCTURE SETUP
+# ============================================================================
+"""
+To set up the complete system:
+
+1. Create directory structure:
+   mkdir -p rag_llm_system/{config,data/{raw,indices,cache},ingest,retrieval,cache,memory,prompt,models,validation,rl,pipeline,observability,tests,scripts}
+
+2. Split the code into appropriate files:
+   - Save config classes in config/
+   - Save ingestion classes in ingest/
+   - Save retrieval classes in retrieval/
+   - etc.
+
+3. Install dependencies:
+   pip install -r requirements.txt
+
+4. Run ingestion:
+   python scripts/ingest_documents.py --input data/raw/ --output data/indices/
+
+5. Run server:
+   python main.py
+
+The modular design allows:
+- Easy testing of individual components
+- Independent scaling of modules
+- Clear dependency management
+- Simple addition of new features
+"""
+
