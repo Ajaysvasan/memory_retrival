@@ -1,4 +1,0 @@
-Hello world
-I am ajay
-
-This is a RAG project 
