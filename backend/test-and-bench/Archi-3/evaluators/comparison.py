@@ -7,10 +7,8 @@ class ComparisonEvaluator:
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def evaluate(self, ai, human):
-        sim = float(
-            np.dot(self.model.encode(ai), self.model.encode(human)) /
-            (np.linalg.norm(self.model.encode(ai))*np.linalg.norm(self.model.encode(human))+1e-8)
-        )
+        sim = float(np.dot(self.model.encode(ai), self.model.encode(human)) /
+            (np.linalg.norm(self.model.encode(ai))*np.linalg.norm(self.model.encode(human))+1e-8))
 
         if sim > 0.85:
             rec = "ACCEPT"
@@ -19,4 +17,4 @@ class ComparisonEvaluator:
         else:
             rec = "REJECT"
 
-        return ComparisonResult(agreement_score=sim, recommendation=rec)
+        return ComparisonResult(sim, rec)

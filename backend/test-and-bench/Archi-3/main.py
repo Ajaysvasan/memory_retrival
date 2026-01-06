@@ -2,12 +2,12 @@ import json
 from core.document import Document
 from system.agentic_rag_system import AgenticRAGSystem
 
-documents = [
-    Document("d1", "Neural networks learn via backpropagation.", {}),
-    Document("d2", "Gradient descent updates weights.", {}),
+docs = [
+    Document("d1", "Neural networks learn via backpropagation."),
+    Document("d2", "Gradient descent updates weights."),
 ]
 
-rag = AgenticRAGSystem(documents)
+rag = AgenticRAGSystem(docs)
 
 query = "How do neural networks learn?"
 human = "Neural networks learn through backpropagation."
