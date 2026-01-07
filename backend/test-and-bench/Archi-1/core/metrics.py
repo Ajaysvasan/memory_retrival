@@ -1,21 +1,11 @@
 from dataclasses import dataclass
 
 @dataclass
-class ComplexityMetrics:
-    operation: str
-    time_complexity: str
-    space_complexity: str
-    description: str
-    empirical_time: float = 0.0
-
-
-@dataclass
 class ConsistencyScore:
     semantic_consistency: float
     lexical_consistency: float
     overall_consistency: float
     variation_coefficient: float
-
 
 @dataclass
 class AccuracyMetrics:
@@ -24,7 +14,6 @@ class AccuracyMetrics:
     similarity_score: float
     f1_score: float
     exact_match: bool
-
 
 @dataclass
 class ComparisonResult:
@@ -36,3 +25,10 @@ class ComparisonResult:
     length_ratio: float
     agreement_score: float
     recommendation: str
+
+@dataclass
+class ComplexityMetrics:
+    operation: str
+    time_complexity: str
+    space_complexity: str
+    description: str

@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any
+import numpy as np
 
 @dataclass
-class RetrievedDoc:
+class VectorRecord:
     doc_id: str
+    embedding: np.ndarray
     content: str
-    semantic_score: float = 0.0
-    bm25_score: float = 0.0
-    hybrid_score: float = 0.0
-    rerank_score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)

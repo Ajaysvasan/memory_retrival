@@ -1,34 +1,25 @@
 import json
 from core.document import Document
-from rag.enhanced_rag import EnhancedRAGSystem
+from rag.enhanced_rag import HybridRAGwithVectorDB
 
+docs = [
+    Document("d1","Neural networks learn via backpropagation."),
+    Document("d2","Deep learning uses layered neural networks."),
+    Document("d3","Gradient descent updates weights."),
+]
 
-def main():
-    documents = [
-        Document("doc1", "Machine learning enables systems to learn from data."),
-        Document("doc2", "Deep learning uses neural networks with many layers."),
-        Document("doc3", "Neural networks are inspired by biological neurons."),
-        Document("doc4", "NLP helps computers understand human language."),
-        Document("doc5", "Transformers rely on self-attention mechanisms."),
-    ]
+rag = HybridRAGwithVectorDB()
+rag.setup(docs)
 
-    rag = EnhancedRAGSystem(alpha=0.6, rerank_top_k=3)
-    rag.index(documents)
+query = "How do neural networks learn?"
+human = "Neural networks learn by backpropagation."
 
-    query = "How do neural networks learn?"
-    ai_answer = "Neural networks learn using backpropagation and layered representations."
-    human_answer = "Neural networks learn by adjusting weights through backpropagation."
+res = rag.evaluate(query, human)
 
-    result = rag.evaluate_full(query, ai_answer, human_answer, k=5)
-
-    print(json.dumps({
-        "query": result.query,
-        "overall_consistency": result.consistency.overall_consistency,
-        "agreement": result.comparison.agreement_score,
-        "recommendation": result.comparison.recommendation,
-        "execution_time": result.total_time
-    }, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+print(json.dumps({
+    "query": res.query,
+    "overall_consistency": float(res.consistency.overall_consistency),
+    "agreement": float(res.comparison.agreement_score),
+    "recommendation": res.comparison.recommendation,
+    "execution_time": float(res.total_time)
+}, indent=2))
