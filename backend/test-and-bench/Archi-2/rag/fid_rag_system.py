@@ -1,43 +1,36 @@
 import time
-from retrievers.hybrid import HybridRetriever
-from fid.answer_generator import AnswerGeneratorFiD
+from retrievers.hybrid_retriever import HybridRetriever
+from fid.answer_generator import AnswerGenerator
 from fid.fusion_encoder import FusionEncoder
 from evaluators.consistency import ConsistencyEvaluator
 from evaluators.accuracy import AccuracyEvaluator
 from evaluators.comparison import ComparisonEvaluator
-from evaluators.complexity import ComplexityAnalyzer
 from core.evaluation_result import EvaluationResult
+from core.metrics import ComplexityMetrics
 
-
-class FusionInDecoderRAG:
-
-    def __init__(self, alpha=0.6, k=8):
-        self.retriever = HybridRetriever(alpha)
-        self.generator = AnswerGeneratorFiD()
+class FiDRAGwithVectorDB:
+    def __init__(self):
+        self.retriever = HybridRetriever()
+        self.answer_gen = AnswerGenerator()
         self.encoder = FusionEncoder()
-        self.consistency = ConsistencyEvaluator()
         self.accuracy = AccuracyEvaluator()
         self.comparison = ComparisonEvaluator()
-        self.complexity = ComplexityAnalyzer()
-        self.k = k
 
-    def index(self, docs):
+    def setup(self, docs):
         self.retriever.index(docs)
-        self.n_docs = len(docs)
+        self.consistency = ConsistencyEvaluator(self.retriever.vector_db)
 
-    def evaluate_full(self, query, human):
+    def evaluate(self, query, human):
         start = time.time()
-        docs = self.retriever.retrieve(query, self.k)
-        ans, stats = self.generator.generate_answer(query, docs, self.encoder)
+        docs = self.retriever.search(query)
+        answer, _ = self.answer_gen.generate(query, docs, self.encoder)
+        consistency = self.consistency.evaluate(query, docs)
+        accuracy = self.accuracy.evaluate(answer, human)
+        comparison = self.comparison.evaluate(answer, human)
 
         return EvaluationResult(
-            query,
-            docs,
-            ans,
-            self.consistency.evaluate(query, docs, stats),
-            self.accuracy.evaluate(ans, human),
-            self.comparison.evaluate(ans, human),
-            self.complexity.get_complexity_analysis(self.n_docs, self.k),
+            query, docs, answer, consistency, accuracy, comparison,
+            [ComplexityMetrics("FiD RAG", "O(n*d)", "O(n*d)", "End-to-end")],
             time.time() - start,
-            stats
+            self.retriever.vector_db.get_stats()
         )

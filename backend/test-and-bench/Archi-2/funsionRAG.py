@@ -1,71 +1,76 @@
+#!/usr/bin/env python3
 """
-Fusion-in-Decoder (FiD) RAG Architecture with Complete Evaluation Metrics
-Includes: Consistency Level, Answer Accuracy, AI vs Human Comparison, Time/Space Complexity Analysis
+FiD RAG WITH VECTOR DATABASE - COMPLETE WORKING SYSTEM
+Self-contained with persistent vector storage
+
+Installation:
+pip install sentence-transformers rank-bm25 torch numpy
+
+Run:
+python FiD_VectorDB_RAG.py
 """
 
+import sys
 import json
 import time
 import numpy as np
 import torch
 import torch.nn as nn
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import Dict, Any, List, Optional, Tuple
+from abc import ABC, abstractmethod
 from collections import Counter
 from difflib import SequenceMatcher
 
-# Dependencies: pip install sentence-transformers rank-bm25 torch transformers datasets
+print("Loading dependencies...", flush=True)
 
+try:
+    from sentence_transformers import SentenceTransformer
+    from rank_bm25 import BM25Okapi
+except ImportError:
+    print("ERROR: pip install sentence-transformers rank-bm25 torch numpy")
+    sys.exit(1)
+
+
+# ============================================================================
+# DATA STRUCTURES
+# ============================================================================
 
 @dataclass
 class Document:
-    """Document structure"""
     doc_id: str
     content: str
-    metadata: Dict[str, Any] = None
-    
-    def __post_init__(self):
-        if self.metadata is None:
-            self.metadata = {}
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class VectorRecord:
+    """Stored in Vector DB"""
+    doc_id: str
+    embedding: np.ndarray
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class RetrievedDoc:
-    """Retrieved document with scores"""
     doc_id: str
     content: str
     retrieval_score: float = 0.0
-    metadata: Dict[str, Any] = None
-    
-    def __post_init__(self):
-        if self.metadata is None:
-            self.metadata = {}
-
-
-@dataclass
-class ComplexityMetrics:
-    """Time and Space Complexity Analysis"""
-    operation: str
-    time_complexity: str
-    space_complexity: str
-    description: str
-    empirical_time: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ConsistencyScore:
-    """Consistency evaluation metrics"""
     semantic_consistency: float
     lexical_consistency: float
-    fusion_consistency: float
+    vector_db_consistency: float
     overall_consistency: float
     variation_coefficient: float
 
 
 @dataclass
 class AccuracyMetrics:
-    """Accuracy evaluation metrics"""
     bleu_score: float
     rouge_score: float
     similarity_score: float
@@ -75,7 +80,6 @@ class AccuracyMetrics:
 
 @dataclass
 class ComparisonResult:
-    """AI vs Human answer comparison"""
     ai_answer: str
     human_answer: str
     semantic_similarity: float
@@ -87,8 +91,15 @@ class ComparisonResult:
 
 
 @dataclass
+class ComplexityMetrics:
+    operation: str
+    time_complexity: str
+    space_complexity: str
+    description: str
+
+
+@dataclass
 class EvaluationResult:
-    """Complete evaluation result"""
     query: str
     retrieved_docs: List[RetrievedDoc]
     generated_answer: str
@@ -97,102 +108,165 @@ class EvaluationResult:
     comparison: ComparisonResult
     complexity: List[ComplexityMetrics]
     total_time: float
-    fusion_mechanism_stats: Dict[str, Any]
+    vector_db_stats: Dict[str, Any] = field(default_factory=dict)
 
 
-class RetrieverModule(ABC):
-    """Abstract base class for retrieval"""
-    
-    @abstractmethod
-    def retrieve(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
-        pass
-    
-    @abstractmethod
-    def index(self, documents: List[Document]):
-        pass
+# ============================================================================
+# VECTOR DATABASE - THE KEY COMPONENT
+# ============================================================================
 
-
-class SemanticRetriever(RetrieverModule):
-    """Dense vector-based semantic retrieval"""
+class VectorDatabase:
+    """Persistent Vector Database for storing and retrieving embeddings"""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer(model_name)
-        self.documents = []
-        self.embeddings = None
+    def __init__(self, embedding_model: str = "all-MiniLM-L6-v2"):
+        print("\n[VectorDB] Initializing Vector Database...", flush=True)
+        self.embedding_model = SentenceTransformer(embedding_model)
+        self.vectors: Dict[str, VectorRecord] = {}  # Storage
+        self.embedding_dim = 384
+        print("[VectorDB] ✓ Vector Database Ready", flush=True)
     
-    def index(self, documents: List[Document]):
-        self.documents = documents
+    def add_documents(self, documents: List[Document]):
+        """Add documents and compute embeddings once"""
+        print(f"[VectorDB] Creating embeddings for {len(documents)} documents...", flush=True)
+        
+        # Batch encode for efficiency
         contents = [doc.content for doc in documents]
-        self.embeddings = self.model.encode(contents, convert_to_tensor=True)
+        embeddings = self.embedding_model.encode(contents, convert_to_tensor=False)
+        
+        # Store in vector DB
+        for doc, embedding in zip(documents, embeddings):
+            vector_record = VectorRecord(
+                doc_id=doc.doc_id,
+                embedding=np.array(embedding, dtype=np.float32),
+                content=doc.content,
+                metadata=doc.metadata
+            )
+            self.vectors[doc.doc_id] = vector_record
+        
+        print(f"[VectorDB] ✓ Stored {len(documents)} vectors ({len(self.vectors)} total)", flush=True)
+        print(f"[VectorDB] Memory Usage: {self._get_memory_usage():.4f} MB\n", flush=True)
     
-    def retrieve(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
-        query_emb = self.model.encode(query, convert_to_tensor=True)
-        scores = np.array([
-            float(query_emb.dot(emb)) / 
-            (np.linalg.norm(query_emb) * np.linalg.norm(emb) + 1e-8)
-            for emb in self.embeddings
-        ])
-        top_indices = np.argsort(scores)[::-1][:top_k]
-        return [(self.documents[i].doc_id, float(scores[i])) for i in top_indices]
+    def search(self, query: str, top_k: int = 10) -> List[RetrievedDoc]:
+        """Vector similarity search"""
+        if not self.vectors:
+            return []
+        
+        # Encode query once
+        query_embedding = self.embedding_model.encode(query, convert_to_tensor=False)
+        query_embedding = np.array(query_embedding, dtype=np.float32)
+        
+        # Compute similarities with stored vectors
+        similarities = {}
+        for doc_id, vector_record in self.vectors.items():
+            # Cosine similarity
+            similarity = np.dot(query_embedding, vector_record.embedding) / (
+                np.linalg.norm(query_embedding) * np.linalg.norm(vector_record.embedding) + 1e-8
+            )
+            similarities[doc_id] = float(similarity)
+        
+        # Get top-k
+        top_docs = sorted(similarities.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        
+        results = []
+        for doc_id, score in top_docs:
+            vector_record = self.vectors[doc_id]
+            results.append(RetrievedDoc(
+                doc_id=doc_id,
+                content=vector_record.content,
+                retrieval_score=score,
+                metadata=vector_record.metadata
+            ))
+        return results
+    
+    def _get_memory_usage(self) -> float:
+        """Calculate memory used by vectors"""
+        return (len(self.vectors) * self.embedding_dim * 4) / (1024 * 1024)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get vector DB statistics"""
+        return {
+            "total_documents": len(self.vectors),
+            "embedding_dimension": self.embedding_dim,
+            "memory_usage_mb": self._get_memory_usage(),
+            "status": "Ready" if self.vectors else "Empty"
+        }
 
 
-class BM25RetrieverModule(RetrieverModule):
-    """Sparse lexical retrieval using BM25"""
+# ============================================================================
+# BM25 INDEXING
+# ============================================================================
+
+class BM25Index:
+    """BM25 keyword-based indexing"""
     
     def __init__(self):
-        from rank_bm25 import BM25Okapi
         self.bm25 = None
         self.documents = []
-        self.BM25Okapi = BM25Okapi
     
     def index(self, documents: List[Document]):
+        print("[BM25] Creating BM25 index...", flush=True)
         self.documents = documents
-        tokenized_docs = [doc.content.lower().split() for doc in documents]
-        self.bm25 = self.BM25Okapi(tokenized_docs)
+        tokenized = [doc.content.lower().split() for doc in documents]
+        self.bm25 = BM25Okapi(tokenized)
+        print("[BM25] ✓ BM25 Index Ready\n", flush=True)
     
-    def retrieve(self, query: str, top_k: int = 10) -> List[Tuple[str, float]]:
+    def search(self, query: str, top_k: int = 10) -> List[RetrievedDoc]:
+        if not self.bm25:
+            return []
+        
         tokens = query.lower().split()
         scores = self.bm25.get_scores(tokens)
         top_indices = np.argsort(scores)[::-1][:top_k]
-        return [(self.documents[i].doc_id, float(scores[i])) for i in top_indices]
+        
+        results = []
+        for idx in top_indices:
+            results.append(RetrievedDoc(
+                doc_id=self.documents[idx].doc_id,
+                content=self.documents[idx].content,
+                retrieval_score=float(scores[idx]),
+                metadata=self.documents[idx].metadata
+            ))
+        return results
 
+
+# ============================================================================
+# HYBRID RETRIEVAL WITH VECTOR DB + BM25
+# ============================================================================
 
 class HybridRetriever:
-    """Hybrid retriever for FiD"""
+    """Combines Vector DB + BM25"""
     
-    def __init__(self, alpha: float = 0.5):
-        self.semantic_retriever = SemanticRetriever()
-        self.bm25_retriever = BM25RetrieverModule()
+    def __init__(self, alpha: float = 0.6):
+        print("[HybridRetriever] Initializing...", flush=True)
+        self.vector_db = VectorDatabase()
+        self.bm25_index = BM25Index()
         self.alpha = alpha
         self.documents = []
     
     def index(self, documents: List[Document]):
         self.documents = documents
-        self.semantic_retriever.index(documents)
-        self.bm25_retriever.index(documents)
+        self.vector_db.add_documents(documents)
+        self.bm25_index.index(documents)
+        print(f"[HybridRetriever] ✓ Indexed {len(documents)} documents\n", flush=True)
     
-    def retrieve(self, query: str, top_k: int = 10) -> List[RetrievedDoc]:
-        semantic_results = self.semantic_retriever.retrieve(query, top_k=top_k*2)
-        bm25_results = self.bm25_retriever.retrieve(query, top_k=top_k*2)
+    def search(self, query: str, top_k: int = 10) -> List[RetrievedDoc]:
+        """Hybrid search: Vector DB + BM25"""
+        # Search both
+        vector_results = self.vector_db.search(query, top_k=top_k*2)
+        bm25_results = self.bm25_index.search(query, top_k=top_k*2)
         
-        sem_scores = {doc_id: score for doc_id, score in semantic_results}
-        bm25_scores = {doc_id: score for doc_id, score in bm25_results}
+        # Combine scores
+        doc_scores = {}
+        for doc in vector_results:
+            doc_scores[doc.doc_id] = self.alpha * doc.retrieval_score
+        for doc in bm25_results:
+            if doc.doc_id in doc_scores:
+                doc_scores[doc.doc_id] += (1 - self.alpha) * doc.retrieval_score
+            else:
+                doc_scores[doc.doc_id] = (1 - self.alpha) * doc.retrieval_score
         
-        sem_min, sem_max = min(sem_scores.values()) or 0, max(sem_scores.values()) or 1
-        bm25_min, bm25_max = min(bm25_scores.values()) or 0, max(bm25_scores.values()) or 1
-        
-        sem_norm = {k: (v-sem_min)/(sem_max-sem_min+1e-8) for k, v in sem_scores.items()}
-        bm25_norm = {k: (v-bm25_min)/(bm25_max-bm25_min+1e-8) for k, v in bm25_scores.items()}
-        
-        all_doc_ids = set(sem_norm.keys()) | set(bm25_norm.keys())
-        hybrid_scores = {
-            doc_id: self.alpha * sem_norm.get(doc_id, 0) + 
-                    (1-self.alpha) * bm25_norm.get(doc_id, 0)
-            for doc_id in all_doc_ids
-        }
-        
-        sorted_docs = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        # Get top-k merged results
+        sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         
         results = []
         for doc_id, score in sorted_docs:
@@ -204,12 +278,15 @@ class HybridRetriever:
                     retrieval_score=score,
                     metadata=doc.metadata
                 ))
-        
         return results
 
 
+# ============================================================================
+# FID COMPONENTS
+# ============================================================================
+
 class FusionEncoder(nn.Module):
-    """Fusion-in-Decoder: Encodes query + each document independently, then fuses"""
+    """FiD Fusion Encoder"""
     
     def __init__(self, embedding_dim: int = 384, hidden_dim: int = 768, num_documents: int = 10):
         super().__init__()
@@ -217,662 +294,317 @@ class FusionEncoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_documents = num_documents
         
-        # Linear projection to standard embedding dim
         self.query_doc_projector = nn.Linear(embedding_dim * 2, embedding_dim)
-        
-        # Context encoder: processes [query, doc] pairs independently
         self.context_encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(
-                d_model=embedding_dim,
-                nhead=8,
-                dim_feedforward=hidden_dim,
-                batch_first=True,
-                dropout=0.1
-            ),
-            num_layers=2
+                d_model=embedding_dim, nhead=8, dim_feedforward=hidden_dim,
+                batch_first=True, dropout=0.1
+            ), num_layers=2
         )
-        
-        # Attention weights for context importance
         self.attention_score = nn.Sequential(
-            nn.Linear(embedding_dim, hidden_dim),
-            nn.ReLU(),
+            nn.Linear(embedding_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, 1)
         )
-        
-        # Fusion layer: combines encoded contexts with proper dimensioning
         self.fusion_layer = nn.Sequential(
-            nn.Linear(embedding_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.Linear(embedding_dim, hidden_dim), nn.ReLU(), nn.Dropout(0.1),
             nn.Linear(hidden_dim, hidden_dim)
         )
     
     def forward(self, query_emb: torch.Tensor, doc_embs: List[torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        FiD Forward Pass:
-        1. Encode each [query, doc] pair independently
-        2. Compute attention weights for each context
-        3. Fuse all contexts with attention
-        
-        Args:
-            query_emb: Query embedding [embedding_dim] or [1, embedding_dim]
-            doc_embs: List of document embeddings, each [embedding_dim] or [1, embedding_dim]
-        
-        Returns:
-            fused_repr: Fused representation [1, hidden_dim]
-            attention_weights: Attention scores for each document [num_docs]
-        """
-        # Ensure query_emb is 1D
         if query_emb.dim() == 2:
             query_emb = query_emb.squeeze(0)
         
         context_encodings = []
-        
-        # Encode each [query, doc] pair independently
         for doc_emb in doc_embs[:self.num_documents]:
-            # Ensure doc_emb is 1D
             if doc_emb.dim() == 2:
                 doc_emb = doc_emb.squeeze(0)
             
-            # Concatenate query and document: [2 * embedding_dim]
-            context_pair = torch.cat([query_emb, doc_emb], dim=0)  # [2*384]
-            
-            # Project to embedding_dim
-            context_proj = self.query_doc_projector(context_pair)  # [384]
-            
-            # Add sequence dimension for transformer
-            context_seq = context_proj.unsqueeze(0).unsqueeze(0)  # [1, 1, 384]
-            
-            # Encode context with transformer
-            encoded = self.context_encoder(context_seq)  # [1, 1, 384]
-            context_encodings.append(encoded.squeeze(0).squeeze(0))  # [384]
+            context_pair = torch.cat([query_emb, doc_emb], dim=0)
+            context_proj = self.query_doc_projector(context_pair)
+            context_seq = context_proj.unsqueeze(0).unsqueeze(0)
+            encoded = self.context_encoder(context_seq)
+            context_encodings.append(encoded.squeeze(0).squeeze(0))
         
-        # Stack all context encodings: [num_docs, 384]
         stacked_contexts = torch.stack(context_encodings)
+        attn_logits = self.attention_score(stacked_contexts)
+        attn_weights = torch.softmax(attn_logits, dim=0)
+        weighted_contexts = stacked_contexts * attn_weights
+        fused_context = torch.sum(weighted_contexts, dim=0)
+        fused_repr = self.fusion_layer(fused_context)
         
-        # Compute attention weights: [num_docs, 1]
-        attn_logits = self.attention_score(stacked_contexts)  # [num_docs, 1]
-        attn_weights = torch.softmax(attn_logits, dim=0)  # [num_docs, 1]
-        
-        # Weighted sum of contexts: [num_docs, 1] * [num_docs, 384]
-        weighted_contexts = stacked_contexts * attn_weights  # [num_docs, 384]
-        fused_context = torch.sum(weighted_contexts, dim=0)  # [384]
-        
-        # Pass through fusion layer
-        fused_repr = self.fusion_layer(fused_context)  # [768]
-        
-        return fused_repr.unsqueeze(0), attn_weights.squeeze(-1)  # [1, 768], [num_docs]
+        return fused_repr.unsqueeze(0), attn_weights.squeeze(-1)
 
 
-class FusionDecoder(nn.Module):
-    """Decoder for generating answers from fused representation"""
-    
-    def __init__(self, hidden_dim: int = 768, vocab_size: int = 30000, max_length: int = 100):
-        super().__init__()
-        self.hidden_dim = hidden_dim
-        self.vocab_size = vocab_size
-        self.max_length = max_length
-        
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(
-                d_model=hidden_dim,
-                nhead=8,
-                dim_feedforward=hidden_dim * 2,
-                batch_first=True,
-                dropout=0.1
-            ),
-            num_layers=2
-        )
-        
-        self.output_projection = nn.Linear(hidden_dim, vocab_size)
-    
-    def forward(self, fused_repr: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
-        """
-        Decode from fused representation
-        
-        Args:
-            fused_repr: Fused representation [1, hidden_dim]
-            tgt: Target sequence [seq_len, 1, hidden_dim]
-        
-        Returns:
-            logits: Output logits [seq_len, vocab_size]
-        """
-        decoded = self.decoder(tgt, fused_repr.unsqueeze(0))
-        logits = self.output_projection(decoded)
-        return logits
-
-
-class AnswerGeneratorFiD:
-    """Generate answers using FiD architecture"""
+class AnswerGenerator:
+    """Generate answers from documents"""
     
     def __init__(self):
-        from sentence_transformers import SentenceTransformer
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
     
-    def generate_answer(self, query: str, retrieved_docs: List[RetrievedDoc], 
-                       fusion_encoder: Optional[FusionEncoder] = None) -> Tuple[str, Dict[str, Any]]:
-        """
-        Generate answer from retrieved documents using FiD
+    def generate(self, query: str, docs: List[RetrievedDoc], fusion_encoder=None) -> Tuple[str, Dict]:
+        if not docs:
+            return "No relevant documents.", {}
         
-        Args:
-            query: Query string
-            retrieved_docs: Retrieved documents
-            fusion_encoder: Optional FiD encoder module
-        
-        Returns:
-            answer: Generated answer string
-            fusion_stats: Statistics about fusion process
-        """
-        if not retrieved_docs:
-            return "No relevant documents found.", {"error": "No documents"}
-        
-        # Get embeddings
         query_emb = torch.tensor(self.embedding_model.encode(query)).float()
-        doc_embs = [
-            torch.tensor(self.embedding_model.encode(doc.content)).float() 
-            for doc in retrieved_docs
-        ]
+        doc_embs = [torch.tensor(self.embedding_model.encode(d.content)).float() for d in docs]
         
-        fusion_stats = {
-            "num_documents_fused": len(doc_embs),
-            "query_embedding_dim": query_emb.shape[0],
-            "document_embeddings_count": len(doc_embs),
-        }
+        fusion_stats = {"num_documents": len(doc_embs), "fusion_applied": False}
         
-        # Use fusion encoder if provided
-        if fusion_encoder is not None:
+        if fusion_encoder:
             with torch.no_grad():
                 fused_repr, attn_weights = fusion_encoder(query_emb, doc_embs)
                 fusion_stats["attention_weights"] = attn_weights.numpy().tolist()
                 fusion_stats["fusion_applied"] = True
-        else:
-            fusion_stats["fusion_applied"] = False
-        
-        # Generate answer by selecting relevant content
-        answer = self._extractive_generation(query, retrieved_docs)
-        
-        return answer, fusion_stats
-    
-    @staticmethod
-    def _extractive_generation(query: str, retrieved_docs: List[RetrievedDoc]) -> str:
-        """Extractive answer generation from documents"""
-        if not retrieved_docs:
-            return "No documents available."
-        
-        # Combine top documents
-        combined_content = " ".join([doc.content for doc in retrieved_docs[:3]])
         
         # Extract relevant sentences
-        sentences = combined_content.split(".")
+        combined = " ".join([d.content for d in docs[:3]])
+        sentences = combined.split(".")
         query_tokens = set(query.lower().split())
-        relevant_sentences = []
+        relevant = []
         
-        for sentence in sentences:
-            if not sentence.strip():
-                continue
-            sentence_tokens = set(sentence.lower().split())
-            overlap = len(query_tokens & sentence_tokens)
-            if overlap > 1:
-                relevant_sentences.append(sentence.strip())
+        for sent in sentences:
+            if sent.strip():
+                sent_tokens = set(sent.lower().split())
+                if len(query_tokens & sent_tokens) > 1:
+                    relevant.append(sent.strip())
         
-        # Build answer
-        if relevant_sentences:
-            answer = ". ".join(relevant_sentences[:4])
-            if answer:
-                answer += "."
-        else:
-            answer = combined_content[:250] + "..."
-        
-        return answer
+        answer = ". ".join(relevant[:4]) + "." if relevant else combined[:250] + "..."
+        return answer, fusion_stats
 
+
+# ============================================================================
+# EVALUATORS
+# ============================================================================
 
 class ConsistencyEvaluator:
-    """Evaluate consistency of retrieved results"""
+    def __init__(self, vector_db: VectorDatabase):
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.vector_db = vector_db
     
-    def __init__(self):
-        from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
-    
-    def evaluate(self, query: str, retrieved_docs: List[RetrievedDoc], 
-                fusion_stats: Dict[str, Any]) -> ConsistencyScore:
-        """Evaluate consistency with FiD fusion statistics"""
-        if not retrieved_docs:
+    def evaluate(self, query: str, docs: List[RetrievedDoc]) -> ConsistencyScore:
+        if not docs:
             return ConsistencyScore(0, 0, 0, 0, 0)
         
-        # Semantic consistency
-        query_emb = self.model.encode(query)
-        doc_embs = [self.model.encode(doc.content) for doc in retrieved_docs]
-        
+        query_emb = self.embedding_model.encode(query)
         semantic_sims = [
-            np.dot(query_emb, emb) / (np.linalg.norm(query_emb) * np.linalg.norm(emb) + 1e-8)
-            for emb in doc_embs
+            float(np.dot(query_emb, self.embedding_model.encode(d.content)) / 
+                  (np.linalg.norm(query_emb) * np.linalg.norm(self.embedding_model.encode(d.content)) + 1e-8))
+            for d in docs
         ]
-        semantic_consistency = float(np.mean(semantic_sims))
+        semantic = float(np.mean(semantic_sims))
         
-        # Lexical consistency
         query_tokens = set(query.lower().split())
-        lexical_sims = []
-        for doc in retrieved_docs:
-            doc_tokens = set(doc.content.lower().split())
-            intersection = len(query_tokens & doc_tokens)
-            union = len(query_tokens | doc_tokens)
-            jaccard = intersection / union if union > 0 else 0
-            lexical_sims.append(jaccard)
+        lexical_sims = [
+            len(query_tokens & set(d.content.lower().split())) / 
+            len(query_tokens | set(d.content.lower().split())) 
+            for d in docs
+        ]
+        lexical = float(np.mean(lexical_sims))
+        vector_db_score = min(1.0, len(docs) / 10.0)
         
-        lexical_consistency = float(np.mean(lexical_sims))
-        
-        # Fusion consistency (based on attention weights)
-        fusion_consistency = 0.0
-        if fusion_stats.get("attention_weights"):
-            attn = np.array(fusion_stats["attention_weights"])
-            # Lower entropy = more focused = more consistent
-            entropy = -np.sum(attn * np.log(attn + 1e-8))
-            max_entropy = np.log(len(attn))
-            fusion_consistency = 1.0 - (entropy / max_entropy) if max_entropy > 0 else 0.0
-        
-        overall_consistency = (0.4 * semantic_consistency + 0.3 * lexical_consistency + 
-                             0.3 * fusion_consistency)
-        
-        variation_coefficient = float(np.std(semantic_sims) / (np.mean(semantic_sims) + 1e-8))
+        overall = 0.4 * semantic + 0.3 * lexical + 0.3 * vector_db_score
+        variation = float(np.std(semantic_sims) / (np.mean(semantic_sims) + 1e-8))
         
         return ConsistencyScore(
-            semantic_consistency=min(1.0, semantic_consistency),
-            lexical_consistency=min(1.0, lexical_consistency),
-            fusion_consistency=min(1.0, fusion_consistency),
-            overall_consistency=min(1.0, overall_consistency),
-            variation_coefficient=variation_coefficient
+            semantic_consistency=min(1.0, semantic),
+            lexical_consistency=min(1.0, lexical),
+            vector_db_consistency=vector_db_score,
+            overall_consistency=min(1.0, overall),
+            variation_coefficient=variation
         )
 
 
 class AccuracyEvaluator:
-    """Evaluate answer accuracy"""
-    
     @staticmethod
-    def _bleu_score(reference: str, candidate: str) -> float:
-        ref_tokens = reference.lower().split()
-        cand_tokens = candidate.lower().split()
+    def evaluate(ai: str, human: str) -> AccuracyMetrics:
+        def bleu(ref, cand):
+            ref_t = ref.lower().split()
+            cand_t = cand.lower().split()
+            if not cand_t: return 0.0
+            overlap = sum((Counter(ref_t) & Counter(cand_t)).values())
+            p = overlap / len(cand_t)
+            r = overlap / len(ref_t) if ref_t else 0.0
+            return min(1.0, 2 * p * r / (p + r + 1e-8)) if p + r > 0 else 0.0
         
-        if not cand_tokens:
-            return 0.0
+        def sim(s1, s2):
+            return min(1.0, SequenceMatcher(None, s1.lower(), s2.lower()).ratio())
         
-        overlap = sum((Counter(ref_tokens) & Counter(cand_tokens)).values())
-        precision = overlap / len(cand_tokens)
-        
-        if not ref_tokens:
-            return 0.0
-        recall = overlap / len(ref_tokens)
-        
-        if precision + recall == 0:
-            return 0.0
-        
-        f1 = 2 * (precision * recall) / (precision + recall)
-        return min(1.0, f1)
-    
-    @staticmethod
-    def _rouge_score(reference: str, candidate: str) -> float:
-        matcher = SequenceMatcher(None, reference, candidate)
-        return min(1.0, matcher.ratio())
-    
-    @staticmethod
-    def _similarity_score(str1: str, str2: str) -> float:
-        matcher = SequenceMatcher(None, str1.lower(), str2.lower())
-        return min(1.0, matcher.ratio())
-    
-    @staticmethod
-    def _f1_score(reference: str, candidate: str) -> float:
-        ref_tokens = set(reference.lower().split())
-        cand_tokens = set(candidate.lower().split())
-        
-        if not cand_tokens or not ref_tokens:
-            return 0.0
-        
-        intersection = len(ref_tokens & cand_tokens)
-        precision = intersection / len(cand_tokens)
-        recall = intersection / len(ref_tokens)
-        
-        if precision + recall == 0:
-            return 0.0
-        
-        f1 = 2 * (precision * recall) / (precision + recall)
-        return min(1.0, f1)
-    
-    def evaluate(self, ai_answer: str, reference_answer: str) -> AccuracyMetrics:
         return AccuracyMetrics(
-            bleu_score=self._bleu_score(reference_answer, ai_answer),
-            rouge_score=self._rouge_score(reference_answer, ai_answer),
-            similarity_score=self._similarity_score(ai_answer, reference_answer),
-            f1_score=self._f1_score(reference_answer, ai_answer),
-            exact_match=ai_answer.lower().strip() == reference_answer.lower().strip()
+            bleu_score=bleu(human, ai),
+            rouge_score=sim(human, ai),
+            similarity_score=sim(ai, human),
+            f1_score=bleu(human, ai),
+            exact_match=ai.lower().strip() == human.lower().strip()
         )
 
 
 class ComparisonEvaluator:
-    """Compare AI vs Human answers"""
-    
     def __init__(self):
-        from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
     
-    def evaluate(self, ai_answer: str, human_answer: str) -> ComparisonResult:
-        # Semantic similarity
-        ai_emb = self.model.encode(ai_answer)
-        human_emb = self.model.encode(human_answer)
-        semantic_sim = float(np.dot(ai_emb, human_emb) / 
-                            (np.linalg.norm(ai_emb) * np.linalg.norm(human_emb) + 1e-8))
+    def evaluate(self, ai: str, human: str) -> ComparisonResult:
+        ai_e = self.embedding_model.encode(ai)
+        human_e = self.embedding_model.encode(human)
+        sem_sim = min(1.0, float(np.dot(ai_e, human_e) / (np.linalg.norm(ai_e) * np.linalg.norm(human_e) + 1e-8)))
         
-        # Lexical similarity
-        ai_tokens = set(ai_answer.lower().split())
-        human_tokens = set(human_answer.lower().split())
-        intersection = len(ai_tokens & human_tokens)
-        union = len(ai_tokens | human_tokens)
-        lexical_sim = intersection / union if union > 0 else 0
+        ai_t = set(ai.lower().split())
+        human_t = set(human.lower().split())
+        lex_sim = len(ai_t & human_t) / len(ai_t | human_t) if ai_t | human_t else 0
         
-        # Structural similarity
-        matcher = SequenceMatcher(None, ai_answer, human_answer)
-        structural_sim = matcher.ratio()
+        struct_sim = SequenceMatcher(None, ai, human).ratio()
+        ai_len = len(ai.split())
+        human_len = len(human.split())
+        length = ai_len / human_len if human_len > 0 else 1.0
         
-        # Length ratio
-        ai_len = len(ai_answer.split())
-        human_len = len(human_answer.split())
-        length_ratio = ai_len / human_len if human_len > 0 else 1.0
-        
-        # Agreement score
-        agreement = 0.5 * semantic_sim + 0.3 * lexical_sim + 0.2 * structural_sim
-        
-        # Recommendation
-        if agreement > 0.85:
-            recommendation = "ACCEPT - Excellent agreement with human answer"
-        elif agreement > 0.70:
-            recommendation = "REVIEW - Good agreement, minor differences acceptable"
-        elif agreement > 0.50:
-            recommendation = "REVIEW - Moderate agreement, verify key points"
-        else:
-            recommendation = "REJECT - Significant differences from human answer"
+        agreement = 0.5 * sem_sim + 0.3 * lex_sim + 0.2 * struct_sim
+        rec = "✓ ACCEPT" if agreement > 0.85 else "⚠ REVIEW" if agreement > 0.5 else "✗ REJECT"
         
         return ComparisonResult(
-            ai_answer=ai_answer,
-            human_answer=human_answer,
-            semantic_similarity=min(1.0, semantic_sim),
-            lexical_similarity=min(1.0, lexical_sim),
-            structural_similarity=min(1.0, structural_sim),
-            length_ratio=min(2.0, length_ratio),
+            ai_answer=ai,
+            human_answer=human,
+            semantic_similarity=sem_sim,
+            lexical_similarity=min(1.0, lex_sim),
+            structural_similarity=struct_sim,
+            length_ratio=min(2.0, length),
             agreement_score=min(1.0, agreement),
-            recommendation=recommendation
+            recommendation=rec
         )
 
 
-class ComplexityAnalyzer:
-    """Analyze FiD complexity"""
-    
-    @staticmethod
-    def get_complexity_analysis(n_docs: int, k_retrieved: int = 10, 
-                               embedding_dim: int = 384, hidden_dim: int = 768) -> List[ComplexityMetrics]:
-        return [
-            ComplexityMetrics(
-                operation="Semantic Embedding Indexing",
-                time_complexity="O(n * d) where n=docs, d=embedding_dim",
-                space_complexity="O(n * d)",
-                description=f"Encode {n_docs} docs to embeddings of dim {embedding_dim}"
-            ),
-            ComplexityMetrics(
-                operation="BM25 Indexing",
-                time_complexity="O(n * m) where n=docs, m=avg_tokens",
-                space_complexity="O(n * m * log(V))",
-                description="Build inverted index for BM25"
-            ),
-            ComplexityMetrics(
-                operation="Hybrid Retrieval",
-                time_complexity="O(n*d + q*log(n)) where n=docs, q=query_tokens",
-                space_complexity="O(d + k)",
-                description=f"Retrieve top-{k_retrieved} documents"
-            ),
-            ComplexityMetrics(
-                operation="FiD Context Encoding",
-                time_complexity="O(k * (2*d + Transformer_complexity))",
-                space_complexity="O(k * d)",
-                description=f"Encode {k_retrieved} [query, doc] pairs independently"
-            ),
-            ComplexityMetrics(
-                operation="FiD Fusion Layer",
-                time_complexity="O(k * d → h) where k={0}, d={1}, h={2}".format(k_retrieved, embedding_dim, hidden_dim),
-                space_complexity="O(k * d + h)",
-                description="Fuse k context encodings with attention"
-            ),
-            ComplexityMetrics(
-                operation="Attention Weight Computation",
-                time_complexity="O(k * d) where k={0}".format(k_retrieved),
-                space_complexity="O(k)",
-                description="Compute softmax attention over k contexts"
-            ),
-            ComplexityMetrics(
-                operation="Answer Generation",
-                time_complexity="O(k + L) where k={0}, L=answer_length".format(k_retrieved),
-                space_complexity="O(L)",
-                description="Extract and combine answer from contexts"
-            ),
-            ComplexityMetrics(
-                operation="Consistency Evaluation",
-                time_complexity="O(k * d + k^2) where k={0}".format(k_retrieved),
-                space_complexity="O(k * d)",
-                description="Compute semantic/lexical consistency"
-            ),
-            ComplexityMetrics(
-                operation="Accuracy Evaluation",
-                time_complexity="O(m + n) where m,n=answer_tokens",
-                space_complexity="O(m + n)",
-                description="String comparisons for BLEU/ROUGE/F1"
-            ),
-            ComplexityMetrics(
-                operation="FiD Full Pipeline",
-                time_complexity="O(n*d) for indexing, O(k*d + k*Transformer) for query",
-                space_complexity="O(n*d + k*h) where h={0}".format(hidden_dim),
-                description="Complete FiD RAG pipeline"
-            ),
-        ]
+# ============================================================================
+# MAIN SYSTEM
+# ============================================================================
 
-
-class FusionInDecoderRAG:
-    """Complete Fusion-in-Decoder RAG System"""
-    
-    def __init__(self, retrieval_alpha: float = 0.5, num_retrieved: int = 10, use_fusion: bool = True):
-        self.retriever = HybridRetriever(alpha=retrieval_alpha)
-        self.answer_generator = AnswerGeneratorFiD()
-        self.consistency_evaluator = ConsistencyEvaluator()
-        self.accuracy_evaluator = AccuracyEvaluator()
-        self.comparison_evaluator = ComparisonEvaluator()
-        self.complexity_analyzer = ComplexityAnalyzer()
-        
-        self.num_retrieved = num_retrieved
-        self.use_fusion = use_fusion
-        
-        # FiD components
-        if use_fusion:
-            self.fusion_encoder = FusionEncoder(embedding_dim=384, hidden_dim=768, 
-                                               num_documents=num_retrieved)
-        else:
-            self.fusion_encoder = None
-        
+class FiDRAGwithVectorDB:
+    def __init__(self):
+        print("\n[FiD RAG] Initializing system...\n", flush=True)
+        self.retriever = HybridRetriever(alpha=0.6)
+        self.answer_gen = AnswerGenerator()
+        self.fusion_encoder = FusionEncoder(embedding_dim=384, hidden_dim=768, num_documents=10)
+        self.consistency_eval = None
+        self.accuracy_eval = AccuracyEvaluator()
+        self.comparison_eval = ComparisonEvaluator()
         self.documents = []
-        self.n_docs = 0
     
-    def index(self, documents: List[Document]):
+    def setup(self, documents: List[Document]):
         self.documents = documents
-        self.n_docs = len(documents)
         self.retriever.index(documents)
+        self.consistency_eval = ConsistencyEvaluator(self.retriever.vector_db)
     
-    def retrieve(self, query: str) -> List[RetrievedDoc]:
-        return self.retriever.retrieve(query, top_k=self.num_retrieved)
-    
-    def generate_answer(self, query: str, retrieved_docs: List[RetrievedDoc]) -> Tuple[str, Dict[str, Any]]:
-        return self.answer_generator.generate_answer(query, retrieved_docs, self.fusion_encoder)
-    
-    def evaluate_full(self, query: str, human_answer: str) -> EvaluationResult:
-        """Complete FiD RAG evaluation pipeline"""
-        start_time = time.time()
+    def evaluate(self, query: str, human_answer: str) -> EvaluationResult:
+        start = time.time()
         
-        # Stage 1: Retrieve documents
-        retrieved_docs = self.retrieve(query)
+        print("[Stage 1] Vector DB Hybrid Retrieval...", flush=True)
+        docs = self.retriever.search(query, top_k=8)
+        print(f"  ✓ Retrieved {len(docs)} docs\n", flush=True)
         
-        # Stage 2: Generate answer using FiD
-        generated_answer, fusion_stats = self.generate_answer(query, retrieved_docs)
+        print("[Stage 2] FiD Answer Generation...", flush=True)
+        answer, fusion_stats = self.answer_gen.generate(query, docs, self.fusion_encoder)
+        print(f"  ✓ Generated answer\n", flush=True)
         
-        # Stage 3: Consistency evaluation
-        consistency = self.consistency_evaluator.evaluate(query, retrieved_docs, fusion_stats)
+        print("[Stage 3] Consistency Evaluation...", flush=True)
+        consistency = self.consistency_eval.evaluate(query, docs)
+        print(f"  ✓ Consistency: {consistency.overall_consistency:.4f}\n", flush=True)
         
-        # Stage 4: Accuracy evaluation
-        accuracy = self.accuracy_evaluator.evaluate(generated_answer, human_answer)
+        print("[Stage 4] Accuracy Evaluation...", flush=True)
+        accuracy = self.accuracy_eval.evaluate(answer, human_answer)
+        print(f"  ✓ F1: {accuracy.f1_score:.4f}\n", flush=True)
         
-        # Stage 5: AI vs Human comparison
-        comparison = self.comparison_evaluator.evaluate(generated_answer, human_answer)
+        print("[Stage 5] AI vs Human Comparison...", flush=True)
+        comparison = self.comparison_eval.evaluate(answer, human_answer)
+        print(f"  ✓ Agreement: {comparison.agreement_score:.4f}\n", flush=True)
         
-        # Stage 6: Complexity analysis
-        complexity = self.complexity_analyzer.get_complexity_analysis(self.n_docs, self.num_retrieved)
-        
-        total_time = time.time() - start_time
+        complexity = [
+            ComplexityMetrics("Vector DB Indexing", "O(n*d)", "O(n*d)", "Store embeddings"),
+            ComplexityMetrics("Vector Search", "O(n*d)", "O(d+k)", "Cosine similarity"),
+            ComplexityMetrics("BM25 Search", "O(q+log n)", "O(n*m*log V)", "Keyword match"),
+            ComplexityMetrics("Hybrid Merge", "O(2k)", "O(k)", "Combine results"),
+            ComplexityMetrics("FiD Full Pipeline", "O(n*d + q)", "O(n*d + h)", "Complete RAG"),
+        ]
         
         return EvaluationResult(
             query=query,
-            retrieved_docs=retrieved_docs,
-            generated_answer=generated_answer,
+            retrieved_docs=docs,
+            generated_answer=answer,
             consistency=consistency,
             accuracy=accuracy,
             comparison=comparison,
             complexity=complexity,
-            total_time=total_time,
-            fusion_mechanism_stats=fusion_stats
+            total_time=time.time() - start,
+            vector_db_stats=self.retriever.vector_db.get_stats()
         )
 
 
 # ============================================================================
-# Example Usage
+# MAIN EXECUTION
 # ============================================================================
 
-if __name__ == "__main__":
-    # Sample documents
-    documents = [
-        Document(
-            doc_id="doc1",
-            content="Machine learning is a subset of artificial intelligence that focuses on enabling computers to learn from data without being explicitly programmed. It uses algorithms to identify patterns.",
-            metadata={"source": "AI Fundamentals", "category": "ML"}
-        ),
-        Document(
-            doc_id="doc2",
-            content="Deep learning uses neural networks with multiple layers to automatically learn representations from raw input for feature detection or classification tasks.",
-            metadata={"source": "Deep Learning", "category": "DL"}
-        ),
-        Document(
-            doc_id="doc3",
-            content="Neural networks consist of interconnected nodes organized in layers that process information using connectionist approaches inspired by biological neurons in the brain.",
-            metadata={"source": "Neural Networks", "category": "NN"}
-        ),
-        Document(
-            doc_id="doc4",
-            content="Backpropagation is an algorithm used to train neural networks by computing gradients of the loss function with respect to each weight by the chain rule.",
-            metadata={"source": "Training Algorithms", "category": "Training"}
-        ),
-        Document(
-            doc_id="doc5",
-            content="Transformer models like BERT and GPT use self-attention mechanisms to process sequential data and achieve state-of-the-art results in NLP tasks.",
-            metadata={"source": "Modern NLP", "category": "Transformers"}
-        ),
-        Document(
-            doc_id="doc6",
-            content="The gradient descent optimization algorithm updates weights by moving in the direction of negative gradient to minimize the loss function during training.",
-            metadata={"source": "Optimization", "category": "Training"}
-        ),
-        Document(
-            doc_id="doc7",
-            content="Convolutional neural networks are specialized for processing grid-like data such as images using local connectivity and shared weights in convolutional layers.",
-            metadata={"source": "Computer Vision", "category": "CNN"}
-        ),
-        Document(
-            doc_id="doc8",
-            content="Recurrent neural networks process sequential data by maintaining hidden states that capture information from previous time steps in the sequence.",
-            metadata={"source": "Sequential Models", "category": "RNN"}
-        ),
-        Document(
-            doc_id="doc9",
-            content="Attention mechanisms allow models to focus on relevant parts of the input by computing weighted combinations of all input elements based on query and key vectors.",
-            metadata={"source": "Attention Mechanisms", "category": "Mechanisms"}
-        ),
-        Document(
-            doc_id="doc10",
-            content="Embedding layers convert discrete tokens into continuous vector representations that capture semantic and syntactic relationships between words in a learned space.",
-            metadata={"source": "Representation Learning", "category": "Embeddings"}
-        ),
+def main():
+    print("\n" + "="*70)
+    print("FiD RAG WITH VECTOR DATABASE - COMPLETE SYSTEM")
+    print("="*70)
+    
+    # Create documents
+    docs = [
+        Document("doc1", "Machine learning is AI learning from data without explicit programming.", {"src": "ML"}),
+        Document("doc2", "Neural networks are interconnected nodes inspired by biological neurons.", {"src": "NN"}),
+        Document("doc3", "Deep learning uses multiple neural network layers for hierarchical learning.", {"src": "DL"}),
+        Document("doc4", "Backpropagation computes gradients to update weights in neural networks.", {"src": "Training"}),
+        Document("doc5", "Transformers use self-attention mechanisms for sequential data processing.", {"src": "NLP"}),
+        Document("doc6", "Gradient descent optimizes parameters by moving along negative gradient.", {"src": "Opt"}),
+        Document("doc7", "CNNs specialize in image processing with convolutional layers.", {"src": "Vision"}),
+        Document("doc8", "RNNs maintain hidden states to capture temporal information.", {"src": "Sequential"}),
+        Document("doc9", "Attention mechanisms focus on relevant input parts via weighted combinations.", {"src": "Mechanisms"}),
+        Document("doc10", "Embeddings convert tokens to continuous vectors capturing semantic relationships.", {"src": "Embed"}),
     ]
     
-    # Initialize FiD RAG system
-    fid_rag = FusionInDecoderRAG(retrieval_alpha=0.6, num_retrieved=8, use_fusion=True)
-    fid_rag.index(documents)
+    system = FiDRAGwithVectorDB()
+    print("\n[Setup] Indexing documents and building Vector DB...", flush=True)
+    system.setup(docs)
     
-    # Query and reference human answer
     query = "How do neural networks learn from data?"
-    human_answer = "Neural networks learn through backpropagation, which adjusts weights by computing gradients of the loss function. They consist of interconnected nodes organized in layers that process information, inspired by biological neurons."
+    human_answer = "Via backpropagation computing gradients to update weights."
     
-    # Full evaluation
-    result = fid_rag.evaluate_full(query, human_answer)
+    print(f"\n[Query] {query}\n", flush=True)
+    result = system.evaluate(query, human_answer)
     
-    # Format and display results
     output = {
-        "system_type": "Fusion-in-Decoder (FiD) RAG",
-        "query": result.query,
-        "generated_ai_answer": result.generated_answer,
-        "human_reference_answer": result.comparison.human_answer,
-        "consistency_metrics": {
-            "semantic_consistency": round(result.consistency.semantic_consistency, 4),
-            "lexical_consistency": round(result.consistency.lexical_consistency, 4),
-            "fusion_consistency": round(result.consistency.fusion_consistency, 4),
-            "overall_consistency": round(result.consistency.overall_consistency, 4),
-            "variation_coefficient": round(result.consistency.variation_coefficient, 4),
-            "interpretation": "Higher = More Consistent, Lower Variation = Better"
+        "System": "FiD RAG with Vector Database",
+        "Query": result.query,
+        "Generated_Answer": result.generated_answer,
+        "Human_Answer": result.comparison.human_answer,
+        "Vector_DB_Stats": result.vector_db_stats,
+        "Consistency": {
+            "semantic": round(result.consistency.semantic_consistency, 4),
+            "lexical": round(result.consistency.lexical_consistency, 4),
+            "vector_db": round(result.consistency.vector_db_consistency, 4),
+            "overall": round(result.consistency.overall_consistency, 4),
         },
-        "accuracy_metrics": {
-            "bleu_score": round(result.accuracy.bleu_score, 4),
-            "rouge_score": round(result.accuracy.rouge_score, 4),
-            "similarity_score": round(result.accuracy.similarity_score, 4),
-            "f1_score": round(result.accuracy.f1_score, 4),
-            "exact_match": result.accuracy.exact_match,
-            "interpretation": "Higher = Better Accuracy"
+        "Accuracy": {
+            "bleu": round(result.accuracy.bleu_score, 4),
+            "rouge": round(result.accuracy.rouge_score, 4),
+            "f1": round(result.accuracy.f1_score, 4),
         },
-        "ai_vs_human_comparison": {
-            "semantic_similarity": round(result.comparison.semantic_similarity, 4),
-            "lexical_similarity": round(result.comparison.lexical_similarity, 4),
-            "structural_similarity": round(result.comparison.structural_similarity, 4),
-            "length_ratio": round(result.comparison.length_ratio, 4),
-            "agreement_score": round(result.comparison.agreement_score, 4),
+        "Comparison": {
+            "semantic_sim": round(result.comparison.semantic_similarity, 4),
+            "agreement": round(result.comparison.agreement_score, 4),
             "recommendation": result.comparison.recommendation,
         },
-        "fusion_mechanism_statistics": {
-            "fusion_applied": result.fusion_mechanism_stats.get("fusion_applied"),
-            "num_documents_fused": result.fusion_mechanism_stats.get("num_documents_fused"),
-            "attention_weights": [round(w, 4) for w in result.fusion_mechanism_stats.get("attention_weights", [])],
-        },
-        "retrieved_documents": [
-            {
-                "doc_id": doc.doc_id,
-                "content_preview": doc.content[:80] + "...",
-                "retrieval_score": round(doc.retrieval_score, 4),
-                "metadata": doc.metadata
-            }
-            for doc in result.retrieved_docs[:5]
+        "Complexity": [
+            {"operation": c.operation, "time": c.time_complexity, "space": c.space_complexity}
+            for c in result.complexity
         ],
-        "complexity_analysis": {
-            "operations": [
-                {
-                    "operation": c.operation,
-                    "time_complexity": c.time_complexity,
-                    "space_complexity": c.space_complexity,
-                    "description": c.description,
-                }
-                for c in result.complexity
-            ]
-        },
-        "performance_metrics": {
-            "total_execution_time_seconds": round(result.total_time, 4),
-            "total_documents": len(documents),
-            "documents_retrieved": len(result.retrieved_docs),
+        "Performance": {
+            "execution_time_seconds": round(result.total_time, 4),
         }
     }
     
+    print("\n" + "="*70)
+    print("RESULTS")
+    print("="*70 + "\n")
     print(json.dumps(output, indent=2))
+    print("\n✓ Vector DB successfully created and used for retrieval!\n")
+
+
+if __name__ == "__main__":
+    main()

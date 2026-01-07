@@ -1,33 +1,24 @@
 import json
 from core.document import Document
-from rag.fid_rag_system import FusionInDecoderRAG
+from rag.fid_rag_system import FiDRAGwithVectorDB
 
+docs = [
+    Document("d1", "Neural networks learn via backpropagation."),
+    Document("d2", "Deep learning uses layered neural networks."),
+]
 
-def main():
-    documents = [
-        Document("d1", "Neural networks learn via backpropagation."),
-        Document("d2", "Deep learning uses layered neural networks."),
-        Document("d3", "Attention allows models to focus on relevant inputs."),
-    ]
+rag = FiDRAGwithVectorDB()
+rag.setup(docs)
 
-    rag = FusionInDecoderRAG()
-    rag.index(documents)
+query = "How do neural networks learn?"
+human = "They learn using backpropagation."
 
-    query = "How do neural networks learn?"
-    human_answer = "Neural networks learn through backpropagation."
+res = rag.evaluate(query, human)
 
-    result = rag.evaluate_full(query, human_answer)
-
-    output = {
-        "query": query,
-        "overall_consistency": float(result.consistency.overall_consistency),
-        "agreement": float(result.comparison.agreement_score),
-        "recommendation": result.comparison.recommendation,
-        "execution_time": float(result.total_time),
-    }
-
-    print(json.dumps(output, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+print(json.dumps({
+    "query": res.query,
+    "overall_consistency": float(res.consistency.overall_consistency),
+    "agreement": float(res.comparison.agreement_score),
+    "recommendation": res.comparison.recommendation,
+    "execution_time": float(res.total_time)
+}, indent=2))

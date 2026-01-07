@@ -1,18 +1,15 @@
 import torch
 from sentence_transformers import SentenceTransformer
 
-
-class AnswerGeneratorFiD:
-
+class AnswerGenerator:
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    def generate_answer(self, query, docs, fusion_encoder=None):
+    def generate(self, query, docs, fusion_encoder=None):
         q = torch.tensor(self.model.encode(query)).float()
         d = [torch.tensor(self.model.encode(x.content)).float() for x in docs]
 
         stats = {"fusion_applied": fusion_encoder is not None}
-
         if fusion_encoder:
             _, w = fusion_encoder(q, d)
             stats["attention_weights"] = w.tolist()
