@@ -5,4 +5,4 @@ __pycache__
 rag_tcrl_x_workspace 
 sample_dataset.json
 *.y
-
+*.log
