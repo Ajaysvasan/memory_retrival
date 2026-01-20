@@ -19,7 +19,7 @@ from orchestration.phase_a_orchestrator import PhaseAOrchestrator
 from orchestration.pipeline import Pipeline
 
 
-def main():
+def Model(query_text: str):
 
     # Initialize logger first
     logger = Logger().get_logger("Main")
@@ -53,7 +53,6 @@ def main():
         else:
             logger.info("Loading existing system state...")
             chunks, embedding_engine, faiss_indexer = initializer.load_existing()
-
         # Step 4: Validate integrity
         validator_integrity = IntegrityValidator()
         validator_integrity.validate(chunks, embedding_engine, faiss_indexer)
@@ -132,8 +131,6 @@ def main():
 
         while True:
             try:
-                query_text = input("\nQuery: ").strip()
-
                 if query_text.lower() in ["quit", "exit", "q"]:
                     break
 
@@ -150,15 +147,22 @@ def main():
             except Exception as e:
                 logger.error(f"Error processing query: {e}", exc_info=True)
 
-        # Step 8: Shutdown
-        logger.info("\n" + "=" * 80)
-        logger.info("SHUTTING DOWN")
-        logger.info("=" * 80)
+        try:
+            response = pipeline.process(query_text)
+            print(response["answer"])
+            return {"answer": response["answer"]}
+        except Exception as e:
+            logger.error(f"Error in processing the query {e}", exc_info=True)
+            raise Exception(f"Error in processing the query {e}")
+        # # Step 8: Shutdown
+        # logger.info("\n" + "=" * 80)
+        # logger.info("SHUTTING DOWN")
+        # logger.info("=" * 80)
 
-        pipeline.shutdown()
+        # pipeline.shutdown()
 
-        logger.info("✓ Shutdown complete")
-        logger.info("Goodbye!")
+        # logger.info("✓ Shutdown complete")
+        # logger.info("Goodbye!")
 
     except Exception as e:
         logger.critical(f"FATAL ERROR: {e}", exc_info=True)
@@ -190,5 +194,8 @@ def print_response(response: dict):
     print("-" * 80)
 
 
-if __name__ == "__main__":
-    main()
+try:
+    if __name__ == "__main__":
+        Model("hello world")
+except:
+    pass
