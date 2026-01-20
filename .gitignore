@@ -6,3 +6,11 @@ rag_tcrl_x_workspace
 sample_dataset.json
 *.y
 *.log
+logs/
+datasets/
+*pdfs
+*plk
+*.pkl
+*.npy
+*.pt
+faiss_indexes
