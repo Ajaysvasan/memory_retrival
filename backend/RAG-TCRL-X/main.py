@@ -141,7 +141,8 @@ def main():
                     continue
 
                 response = pipeline.process(query_text)
-                print_response(response)
+                # print_response(response)
+                print(response["answer"])
 
             except KeyboardInterrupt:
                 logger.info("\nInterrupted by user")
