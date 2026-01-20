@@ -1,10 +1,13 @@
 import re
-from typing import List, Set, Tuple, FrozenSet
+from typing import FrozenSet, List, Set, Tuple
+
 import numpy as np
+
+from config import Config
+from core.contracts.query import Query
 from core.contracts.retrieve_result import RetrieveResult
 from core.contracts.validation import Validation, ValidationStatus
 from logger import Logger
-from config import Config
 
 
 class Validator:
@@ -14,10 +17,14 @@ class Validator:
         self.embedding_engine = embedding_engine
         self.logger = Logger().get_logger("Validator")
 
-    def validate(self, answer: str, retrieval_result: RetrieveResult) -> Validation:
-        """Validate answer against retrieved evidence"""
+        self.query_evidence_threshold = 0.30
+        self.query_answer_threshold = 0.35
 
-        # Extract claims from answer
+    def validate(
+        self, answer: str, retrieval_result: RetrieveResult, query: Query = None
+    ) -> Validation:
+        """Validate answer against retrieved evidence and query"""
+
         claims = self._extract_claims(answer)
 
         if not claims:
@@ -29,7 +36,6 @@ class Validator:
                 reasoning="No verifiable claims in answer",
             )
 
-        # Check for over-information
         if len(claims) > 10 or len(answer.split()) > 500:
             return Validation(
                 status=ValidationStatus.OVER_INFORMATION,
@@ -39,15 +45,62 @@ class Validator:
                 reasoning="Answer contains too much information",
             )
 
-        # Compute evidence alignment
+        evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
+
+        if not evidence_texts:
+            return Validation(
+                status=ValidationStatus.INSUFFICIENT_EVIDENCE,
+                evidence_score=0.0,
+                claims=tuple(claims),
+                evidence_chunk_ids=frozenset(),
+                reasoning="No evidence chunks available",
+            )
+
+        evidence_embeddings = self.embedding_engine.embed_texts(evidence_texts)
+
+        if query is not None:
+            query_embedding = self.embedding_engine.embed_query(query.text)
+
+            query_evidence_score = self._query_evidence_alignment(
+                query_embedding, evidence_embeddings
+            )
+
+            self.logger.debug(f"Query-Evidence alignment: {query_evidence_score:.3f}")
+
+            if query_evidence_score < self.query_evidence_threshold:
+                return Validation(
+                    status=ValidationStatus.INSUFFICIENT_EVIDENCE,
+                    evidence_score=0.0,
+                    claims=tuple(claims),
+                    evidence_chunk_ids=frozenset(),
+                    reasoning="No retrieved evidence is relevant to the query.",
+                )
+
+            answer_embedding = self.embedding_engine.embed_query(answer)
+
+            query_answer_score = self._query_answer_alignment(
+                query_embedding, answer_embedding
+            )
+
+            self.logger.debug(f"Query-Answer alignment: {query_answer_score:.3f}")
+
+            if query_answer_score < self.query_answer_threshold:
+                return Validation(
+                    status=ValidationStatus.INSUFFICIENT_EVIDENCE,
+                    evidence_score=0.0,
+                    claims=tuple(claims),
+                    evidence_chunk_ids=frozenset(),
+                    reasoning="Generated answer does not address the question.",
+                )
+
         evidence_score, aligned_chunks = self._compute_evidence_alignment(
-            claims, retrieval_result
+            claims, retrieval_result, evidence_embeddings
         )
 
-        # Check for contradictions
-        contradictions = self._detect_contradictions(claims, retrieval_result)
+        contradictions = self._detect_contradictions(
+            claims, retrieval_result, evidence_embeddings
+        )
 
-        # Determine validation status
         if contradictions:
             status = ValidationStatus.CONTRADICTION_DETECTED
         elif evidence_score < Config.EVIDENCE_THRESHOLD:
@@ -67,18 +120,40 @@ class Validator:
         self.logger.debug(f"Validation: {status.value} (score={evidence_score:.2f})")
         return validation
 
+    def _query_evidence_alignment(
+        self, query_embedding: np.ndarray, evidence_embeddings: np.ndarray
+    ) -> float:
+        """Compute query-evidence alignment using max similarity"""
+
+        if len(evidence_embeddings) == 0:
+            return 0.0
+
+        similarities = np.dot(evidence_embeddings, query_embedding)
+
+        max_similarity = np.max(similarities)
+
+        return float(max_similarity)
+
+    def _query_answer_alignment(
+        self, query_embedding: np.ndarray, answer_embedding: np.ndarray
+    ) -> float:
+        """Compute query-answer alignment using cosine similarity"""
+
+        similarity = np.dot(query_embedding, answer_embedding)
+
+        return float(similarity)
+
     def _extract_claims(self, text: str) -> List[str]:
         """Extract verifiable claims from text"""
-        # Split into sentences
+
         sentences = re.split(r"[.!?]+", text)
 
         claims = []
         for sentence in sentences:
             sentence = sentence.strip()
-            if len(sentence) < 10:  # Skip very short sentences
+            if len(sentence) < 10:
                 continue
 
-            # Filter out questions and meta-statements
             if sentence.endswith("?"):
                 continue
             if any(
@@ -92,24 +167,24 @@ class Validator:
         return claims
 
     def _compute_evidence_alignment(
-        self, claims: List[str], retrieval_result: RetrieveResult
+        self,
+        claims: List[str],
+        retrieval_result: RetrieveResult,
+        evidence_embeddings: np.ndarray = None,
     ) -> Tuple[float, Set[int]]:
         """Compute evidence alignment score using semantic similarity"""
 
         if not claims or not retrieval_result.chunks:
             return 0.0, set()
 
-        # Get embeddings for claims
         claim_embeddings = self.embedding_engine.embed_texts(claims)
 
-        # Get embeddings for evidence chunks
-        evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
-        evidence_embeddings = self.embedding_engine.embed_texts(evidence_texts)
+        if evidence_embeddings is None:
+            evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
+            evidence_embeddings = self.embedding_engine.embed_texts(evidence_texts)
 
-        # Compute similarity matrix
         similarities = np.dot(claim_embeddings, evidence_embeddings.T)
 
-        # For each claim, find max similarity with evidence
         aligned_chunks = set()
         supported_claims = 0
 
@@ -117,17 +192,18 @@ class Validator:
             max_sim = np.max(claim_sims)
             if max_sim >= Config.SIMILARITY_THRESHOLD:
                 supported_claims += 1
-                # Track which chunk provided evidence
                 best_chunk_idx = np.argmax(claim_sims)
                 aligned_chunks.add(retrieval_result.chunks[best_chunk_idx].chunk_id)
 
-        # Evidence score = ratio of supported claims
         evidence_score = supported_claims / len(claims) if claims else 0.0
 
         return evidence_score, aligned_chunks
 
     def _detect_contradictions(
-        self, claims: List[str], retrieval_result: RetrieveResult
+        self,
+        claims: List[str],
+        retrieval_result: RetrieveResult,
+        evidence_embeddings: np.ndarray = None,
     ) -> List[str]:
         """Detect contradictions between claims and evidence"""
 
@@ -136,12 +212,12 @@ class Validator:
 
         contradictions = []
 
-        # Get embeddings
         claim_embeddings = self.embedding_engine.embed_texts(claims)
-        evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
-        evidence_embeddings = self.embedding_engine.embed_texts(evidence_texts)
 
-        # Look for negation patterns
+        if evidence_embeddings is None:
+            evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
+            evidence_embeddings = self.embedding_engine.embed_texts(evidence_texts)
+
         negation_patterns = [
             (r"\bnot\b", r"\bis\b"),
             (r"\bno\b", r"\byes\b"),
@@ -149,23 +225,20 @@ class Validator:
             (r"\bfalse\b", r"\btrue\b"),
         ]
 
+        evidence_texts = [chunk.text for chunk in retrieval_result.chunks]
+
         for i, claim in enumerate(claims):
             claim_lower = claim.lower()
 
-            for evidence_text in evidence_texts:
+            for j, evidence_text in enumerate(evidence_texts):
                 evidence_lower = evidence_text.lower()
 
-                # Check for explicit negation patterns
                 for neg_pattern, pos_pattern in negation_patterns:
                     if re.search(neg_pattern, claim_lower) and re.search(
                         pos_pattern, evidence_lower
                     ):
 
-                        # Verify with semantic similarity
-                        sim = np.dot(
-                            claim_embeddings[i],
-                            evidence_embeddings[evidence_texts.index(evidence_text)],
-                        )
+                        sim = np.dot(claim_embeddings[i], evidence_embeddings[j])
 
                         if sim > Config.CONTRADICTION_THRESHOLD:
                             contradictions.append(

@@ -1,10 +1,12 @@
 import time
-import numpy as np
 from typing import List, Set
+
+import numpy as np
+
 from core.contracts.query import Query
 from core.contracts.retrieval_plan import RetrievalPlan
-from core.contracts.retrieved_chunk import RetrievedChunk
 from core.contracts.retrieve_result import RetrieveResult
+from core.contracts.retrieved_chunk import RetrievedChunk
 from data.embedding_engine import EmbeddingEngine
 from data.faiss_indexer import FAISSIndexer
 from logger import Logger
@@ -24,27 +26,44 @@ class RetrievalEngine:
         self.chunks = {chunk.chunk_id: chunk for chunk in chunks}
         self.logger = Logger().get_logger("Retrieval")
 
+        self.logger.info(f"RetrievalEngine initialized with {len(self.chunks)} chunks")
+        self.logger.info(
+            f"FAISS indexes loaded: {len(self.faiss_indexer.indexes)} topics"
+        )
+
     def retrieve(self, query: Query, plan: RetrievalPlan) -> RetrieveResult:
         """Retrieve chunks based on plan"""
 
         start_time = time.time()
 
-        # Embed query
-        query_embedding = self.embedding_engine.embed_query(query.text)
+        self.logger.info(
+            f"Retrieving: topics={list(plan.topic_ids)}, max_chunks={plan.max_chunks}"
+        )
 
-        # Search using FAISS
+        query_embedding = self.embedding_engine.embed_query(query.text)
+        self.logger.debug(f"Query embedded: shape={query_embedding.shape}")
+
         if plan.use_ann:
             results = self.faiss_indexer.search(
                 query_embedding, list(plan.topic_ids), plan.max_chunks
             )
+            self.logger.info(f"FAISS search returned {len(results)} results")
         else:
-            # Fallback to exhaustive search (not implemented here)
             self.logger.warning("Non-ANN retrieval not implemented, using ANN")
             results = self.faiss_indexer.search(
                 query_embedding, list(plan.topic_ids), plan.max_chunks
             )
 
-        # Convert to RetrievedChunk objects
+        if not results:
+            self.logger.error("CRITICAL: FAISS search returned 0 results")
+            retrieval_time_ms = (time.time() - start_time) * 1000
+            return RetrieveResult(
+                chunks=tuple(),
+                from_cache=False,
+                total_searched=0,
+                retrieval_time_ms=retrieval_time_ms,
+            )
+
         chunks = []
         for chunk_id, similarity, topic_id in results:
             if chunk_id not in self.chunks:
@@ -65,14 +84,16 @@ class RetrievalEngine:
 
         retrieval_time_ms = (time.time() - start_time) * 1000
 
+        total_searched = sum(
+            self.faiss_indexer.indexes[tid].ntotal
+            for tid in plan.topic_ids
+            if tid in self.faiss_indexer.indexes
+        )
+
         result = RetrieveResult(
             chunks=tuple(chunks),
             from_cache=False,
-            total_searched=sum(
-                self.faiss_indexer.indexes[tid].ntotal
-                for tid in plan.topic_ids
-                if tid in self.faiss_indexer.indexes
-            ),
+            total_searched=total_searched,
             retrieval_time_ms=retrieval_time_ms,
         )
 
@@ -80,5 +101,8 @@ class RetrievalEngine:
             f"Retrieved {len(chunks)} chunks in {retrieval_time_ms:.1f}ms "
             f"(searched {result.total_searched} vectors)"
         )
+
+        if len(chunks) == 0:
+            self.logger.error("RETRIEVAL RETURNED 0 CHUNKS - NO EVIDENCE AVAILABLE")
 
         return result

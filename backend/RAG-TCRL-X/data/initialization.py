@@ -29,11 +29,9 @@ class SystemInitializer:
         self.logger.info("STARTING SYSTEM INITIALIZATION")
         self.logger.info("=" * 80)
 
-        # Step 1: Load all documents from multiple files
         documents = self.ingestion.load_all_documents()
         self.logger.info(f"Loaded {len(documents)} total documents")
 
-        # Step 2: Chunk documents
         chunks = self.ingestion.chunk_documents(documents)
 
         if not chunks:
@@ -41,21 +39,30 @@ class SystemInitializer:
                 "CRITICAL: Chunking produced 0 chunks - system invariant violated"
             )
 
-        # Step 3: Show statistics
         stats = self.ingestion.get_statistics(chunks)
         self.logger.info("Dataset Statistics:")
         self.logger.info(f"  Total chunks: {stats['total_chunks']}")
+
+        if stats["corpora"]:
+            self.logger.info("  Chunks by corpus:")
+            for corpus, count in sorted(stats["corpora"].items()):
+                self.logger.info(f"    - {corpus}: {count} chunks")
+                if corpus in stats["topics"]:
+                    for topic, topic_count in sorted(stats["topics"][corpus].items()):
+                        self.logger.info(f"      └─ {topic}: {topic_count} chunks")
+
         self.logger.info("  Chunks by file:")
-        for filename, count in sorted(stats["files"].items()):
+        for filename, count in sorted(stats["files"].items())[:10]:
             self.logger.info(f"    - {filename}: {count} chunks")
+        if len(stats["files"]) > 10:
+            self.logger.info(f"    ... and {len(stats['files']) - 10} more files")
+
         self.logger.info("  Chunks by format:")
         for file_format, count in sorted(stats["formats"].items()):
             self.logger.info(f"    - {file_format}: {count} chunks")
 
-        # Step 4: Deduplicate
         chunks = self.ingestion.deduplicate_chunks(chunks)
 
-        # Step 5: Embed chunks
         embeddings = self.embedding_engine.embed_chunks(chunks)
 
         if len(embeddings) == 0:
@@ -63,10 +70,8 @@ class SystemInitializer:
                 "CRITICAL: Embedding produced 0 embeddings - system invariant violated"
             )
 
-        # Step 6: Save embeddings
         self.embedding_engine.save_embeddings(embeddings, Config.EMBEDDINGS_PATH)
 
-        # Step 7: Train topic model
         centroids = self.topic_modeler.train(embeddings)
 
         if centroids is None or len(centroids) == 0:
@@ -74,23 +79,17 @@ class SystemInitializer:
                 "CRITICAL: Topic model training produced 0 centroids - system invariant violated"
             )
 
-        # Step 8: Assign topics
         topic_assignments = self.topic_modeler.assign_topics(embeddings)
 
-        # Step 9: Save topic centroids
         self.topic_modeler.save_centroids(Config.TOPICS_PATH)
 
-        # Step 10: Get topic distribution
         self.topic_modeler.get_topic_distribution(topic_assignments)
 
-        # Step 11: Build FAISS indexes
         chunk_ids = [chunk.chunk_id for chunk in chunks]
         self.faiss_indexer.build_indexes(embeddings, topic_assignments, chunk_ids)
 
-        # Step 12: Save FAISS indexes
         self.faiss_indexer.save_indexes(Config.FAISS_DIR)
 
-        # Step 13: Save chunks metadata
         self._save_chunks(chunks)
 
         self.logger.info("=" * 80)
@@ -106,26 +105,29 @@ class SystemInitializer:
         self.logger.info("LOADING EXISTING SYSTEM")
         self.logger.info("=" * 80)
 
-        # Load chunks
         chunks = self._load_chunks()
         self.logger.info(f"Loaded {len(chunks)} chunks")
 
-        # Show statistics
         stats = self.ingestion.get_statistics(chunks)
         self.logger.info("Loaded Dataset Statistics:")
         self.logger.info(f"  Total chunks: {stats['total_chunks']}")
-        self.logger.info("  Chunks by file:")
-        for filename, count in sorted(stats["files"].items()):
-            self.logger.info(f"    - {filename}: {count} chunks")
 
-        # Load embeddings (for validation)
+        if stats["corpora"]:
+            self.logger.info("  Chunks by corpus:")
+            for corpus, count in sorted(stats["corpora"].items()):
+                self.logger.info(f"    - {corpus}: {count} chunks")
+
+        self.logger.info("  Chunks by file:")
+        for filename, count in sorted(stats["files"].items())[:10]:
+            self.logger.info(f"    - {filename}: {count} chunks")
+        if len(stats["files"]) > 10:
+            self.logger.info(f"    ... and {len(stats['files']) - 10} more files")
+
         embeddings = self.embedding_engine.load_embeddings(Config.EMBEDDINGS_PATH)
         self.logger.info(f"Loaded embeddings: shape={embeddings.shape}")
 
-        # Load topic centroids
         self.topic_modeler.load_centroids(Config.TOPICS_PATH)
 
-        # Load FAISS indexes
         self.faiss_indexer.load_indexes(Config.FAISS_DIR)
 
         self.logger.info("=" * 80)
@@ -169,11 +171,9 @@ class IntegrityValidator:
 
         self.logger.info("Validating system integrity...")
 
-        # Check chunks
         if not chunks:
             raise RuntimeError("INTEGRITY VIOLATION: No chunks loaded")
 
-        # Check embeddings exist
         if not Config.EMBEDDINGS_PATH.exists():
             raise RuntimeError("INTEGRITY VIOLATION: Embeddings file missing")
 
@@ -184,15 +184,12 @@ class IntegrityValidator:
                 f"!= chunk count ({len(chunks)})"
             )
 
-        # Check topic centroids
         if not Config.TOPICS_PATH.exists():
             raise RuntimeError("INTEGRITY VIOLATION: Topic centroids missing")
 
-        # Check FAISS indexes
         if not faiss_indexer.indexes:
             raise RuntimeError("INTEGRITY VIOLATION: No FAISS indexes loaded")
 
-        # Check total indexed vectors matches chunks
         total_indexed = sum(idx.ntotal for idx in faiss_indexer.indexes.values())
         if total_indexed != len(chunks):
             raise RuntimeError(

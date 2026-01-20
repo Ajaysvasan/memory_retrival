@@ -1,17 +1,19 @@
 import time
-from typing import Optional, Dict
 from datetime import datetime
+from typing import Dict, Optional
+
+from config import Config
 from core.contracts.query import Query
 from core.contracts.retrieve_result import RetrieveResult
 from core.contracts.validation import Validation
-from orchestration.phase_a_orchestrator import PhaseAOrchestrator
-from modules.intake.query_intake import QueryIntake
-from modules.validation.validator import Validator
+from core.errors.refusal_reason import RefusalReason
+from logger import Logger
 from modules.generation.generator_adaptor import GeneratorAdaptor
+from modules.intake.query_intake import QueryIntake
 from modules.memory_gate.mutation_gate import MutationGate
 from modules.rl.rl_agent import RLAgent
-from logger import Logger
-from config import Config
+from modules.validation.validator import Validator
+from orchestration.phase_a_orchestrator import PhaseAOrchestrator
 
 
 class Pipeline:
@@ -37,7 +39,6 @@ class Pipeline:
 
         self.logger = Logger().get_logger("Pipeline")
 
-        # Metrics
         self.query_count = 0
         self.total_latency = 0.0
         self.cache_hits = 0
@@ -54,14 +55,15 @@ class Pipeline:
         self.logger.info(f"{'='*80}")
 
         try:
-            # Step 1: Intake
             query = self.query_intake.process(query_text, user_id=user_id)
+            self.logger.info(f"[1] Query intake complete")
 
-            # Step 2: Build context
             context = self._build_context()
 
-            # Step 3: Phase A (Intent → Plan)
             phase_a_decision = self.phase_a.orchestrate(query, context)
+            self.logger.info(
+                f"[2] Phase A complete: should_proceed={phase_a_decision.should_proceed}"
+            )
 
             if not phase_a_decision.should_proceed:
                 self.refusals += 1
@@ -69,41 +71,50 @@ class Pipeline:
                     phase_a_decision.refusal_reason, start_time
                 )
 
-            # Step 4: Check cache
             cached_chunks = None
             if phase_a_decision.plan.use_cache:
                 cached_chunks = self.mutation_gate.check_cache(phase_a_decision.plan)
+                if cached_chunks:
+                    self.logger.info(f"[3] Cache HIT: {len(cached_chunks)} chunk IDs")
 
-            # Step 5: Retrieval
             if cached_chunks:
                 self.cache_hits += 1
                 retrieval_result = self._create_cached_result(cached_chunks)
             else:
+                self.logger.info(f"[3] Cache MISS - invoking retrieval engine")
                 retrieval_result = self.retrieval_engine.retrieve(
                     query, phase_a_decision.plan
                 )
+                self.logger.info(
+                    f"[4] Retrieval complete: {len(retrieval_result.chunks)} chunks retrieved"
+                )
 
-            # Step 6: Generation
+            if len(retrieval_result.chunks) == 0:
+                self.logger.error("RETRIEVAL FAILURE: 0 chunks returned")
+                self.refusals += 1
+                return self._create_refusal_response(
+                    RefusalReason.NO_RELEVANT_DATA.to_message(), start_time
+                )
+
             answer = self.generator.generate(query, retrieval_result)
+            self.logger.info(f"[5] Generation complete: {len(answer)} chars")
 
-            # Step 7: Validation
-            validation = self.validator.validate(answer, retrieval_result)
+            validation = self.validator.validate(answer, retrieval_result, query)
+            self.logger.info(
+                f"[6] Validation complete: status={validation.status.value}, score={validation.evidence_score:.2f}"
+            )
 
-            # Step 8: Handle validation result
             if validation.should_refuse:
                 self.refusals += 1
                 return self._create_validation_refusal(validation, start_time)
 
-            # Step 9: Update memory gate
             self._update_memory_gate(
                 phase_a_decision.plan, retrieval_result, validation
             )
 
-            # Step 10: Compute metrics and train RL
             latency_ms = (time.time() - start_time) * 1000
             self._train_rl(context, validation, latency_ms)
 
-            # Step 11: Return response
             return self._create_success_response(
                 answer, validation, retrieval_result, latency_ms
             )
@@ -120,56 +131,62 @@ class Pipeline:
         return {
             "cache_hit_rate": cache_hit_rate,
             "avg_latency_ms": avg_latency,
-            "memory_mb": 0.0,  # Would measure actual memory in production
+            "memory_mb": 0.0,
             "query_count": self.query_count,
             "refusal_rate": self.refusals / max(1, self.query_count),
+            "intent_confidence": 0.8,
+            "query_length": 50,
+            "available_chunks": 1000,
+            "last_evidence_score": 0.7,
+            "contradiction_rate": 0.0,
+            "topic_diversity": 0.5,
+            "time_since_last_query_s": 0.0,
         }
 
     def _create_cached_result(self, chunk_ids) -> RetrieveResult:
         """Create result from cached chunk IDs"""
-        # In production, would fetch actual chunks
         from core.contracts.retrieved_chunk import RetrievedChunk
 
-        chunks = tuple(
-            [
-                RetrievedChunk(
-                    chunk_id=cid,
-                    text=f"[Cached chunk {cid}]",
-                    topic_id=0,
-                    similarity_score=0.9,
-                    chunk_index=i,
+        chunks_list = []
+        for i, cid in enumerate(chunk_ids):
+            if cid in self.retrieval_engine.chunks:
+                chunk_data = self.retrieval_engine.chunks[cid]
+                chunks_list.append(
+                    RetrievedChunk(
+                        chunk_id=cid,
+                        text=chunk_data.text,
+                        topic_id=0,
+                        similarity_score=0.9,
+                        chunk_index=i,
+                        source_doc=chunk_data.source_doc,
+                    )
                 )
-                for i, cid in enumerate(chunk_ids)
-            ]
-        )
 
         return RetrieveResult(
-            chunks=chunks, from_cache=True, total_searched=0, retrieval_time_ms=0.0
+            chunks=tuple(chunks_list),
+            from_cache=True,
+            total_searched=0,
+            retrieval_time_ms=0.0,
         )
 
     def _update_memory_gate(self, plan, retrieval_result, validation):
         """Update cache and beliefs"""
 
-        # Admit to cache if valid
         if validation.is_valid:
             chunk_ids = {chunk.chunk_id for chunk in retrieval_result.chunks}
             self.mutation_gate.admit_to_cache(plan, chunk_ids, validation)
             self.mutation_gate.create_beliefs(validation)
 
-        # Handle contradictions
         if validation.contradictions:
             self.mutation_gate.handle_contradiction(validation)
 
-        # Evict expired entries
         self.mutation_gate.evict_expired()
 
     def _train_rl(self, context, validation, latency_ms):
         """Train RL agent"""
 
-        # Extract features
         state = self.rl_agent.extract_state_features(context)
 
-        # Compute reward
         reward = self.rl_agent.compute_reward(
             correct=validation.is_valid,
             latency_ms=latency_ms,
@@ -177,10 +194,6 @@ class Pipeline:
             hallucinated=validation.status.value == "insufficient_evidence",
         )
 
-        # Store experience (simplified - would need action tracking)
-        # In production, track actual action taken
-
-        # Train if enough experiences
         loss = self.rl_agent.train_step()
         if loss is not None:
             self.logger.debug(f"RL training loss: {loss:.4f}")
@@ -218,21 +231,9 @@ class Pipeline:
         latency_ms = (time.time() - start_time) * 1000
         self.total_latency += latency_ms
 
-        from core.errors.refusal_reason import RefusalReason
-
-        reason_map = {
-            "insufficient_evidence": RefusalReason.INSUFFICIENT_EVIDENCE,
-            "contradiction_detected": RefusalReason.CONTRADICTION_DETECTED,
-            "over_information": RefusalReason.OVER_INFORMATION,
-        }
-
-        reason = reason_map.get(
-            validation.status.value, RefusalReason.VALIDATION_FAILED
-        )
-
         return {
             "status": "refused",
-            "reason": reason.to_message(),
+            "reason": validation.reasoning,
             "evidence_score": validation.evidence_score,
             "latency_ms": latency_ms,
             "timestamp": datetime.now().isoformat(),
@@ -253,11 +254,9 @@ class Pipeline:
         """Graceful shutdown"""
         self.logger.info("Shutting down pipeline...")
 
-        # Persist state
         self.mutation_gate.persist()
         self.rl_agent.save_model()
 
-        # Log metrics
         self.logger.info(f"Total queries: {self.query_count}")
         self.logger.info(
             f"Cache hit rate: {self.cache_hits / max(1, self.query_count):.2%}"

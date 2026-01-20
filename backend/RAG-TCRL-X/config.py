@@ -9,7 +9,7 @@ class Config:
     # Paths
     BASE_DIR = Path(__file__).parent
     DATA_DIR = BASE_DIR / "data"
-    DATASET_DIR = DATA_DIR / "datasets"  # Changed to directory for multiple files
+    DATASET_DIR = DATA_DIR / "datasets"
     EMBEDDINGS_PATH = DATA_DIR / "embeddings.npy"
     TOPICS_PATH = DATA_DIR / "topic_centroids.npy"
     FAISS_DIR = DATA_DIR / "faiss_indexes"
@@ -79,14 +79,12 @@ class Config:
         cls.DATASET_DIR.mkdir(parents=True, exist_ok=True)
         cls.FAISS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Check if dataset directory exists and has files
         if not cls.DATASET_DIR.exists():
             raise RuntimeError(
                 f"Dataset directory does not exist: {cls.DATASET_DIR}\n"
                 f"Create the directory and add your dataset files (.txt, .pdf, .docx)"
             )
 
-        # Find all supported files
         dataset_files = cls.get_dataset_files()
 
         if not dataset_files:
@@ -107,12 +105,17 @@ class Config:
 
     @classmethod
     def get_dataset_files(cls) -> List[Path]:
-        """Get all dataset files from the dataset directory"""
+        """Get all dataset files recursively from dataset directory"""
         if not cls.DATASET_DIR.exists():
             return []
 
         dataset_files = []
-        for ext in cls.SUPPORTED_FORMATS:
-            dataset_files.extend(cls.DATASET_DIR.glob(f"*{ext}"))
+
+        for root, dirs, files in os.walk(cls.DATASET_DIR):
+            root_path = Path(root)
+            for filename in files:
+                filepath = root_path / filename
+                if filepath.suffix.lower() in cls.SUPPORTED_FORMATS:
+                    dataset_files.append(filepath)
 
         return sorted(dataset_files)

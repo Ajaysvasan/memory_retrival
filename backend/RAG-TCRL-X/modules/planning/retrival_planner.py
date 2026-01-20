@@ -1,11 +1,12 @@
-from typing import List, Set, FrozenSet
 from datetime import datetime
-from core.contracts.query import Query
-from core.contracts.intent import Intent
-from core.contracts.retrieval_plan import RetrievalPlan
-from modules.intake.query_intake import QueryIntake
-from logger import Logger
+from typing import FrozenSet, List, Set
+
 from config import Config
+from core.contracts.intent import Intent
+from core.contracts.query import Query
+from core.contracts.retrieval_plan import RetrievalPlan
+from logger import Logger
+from modules.intake.query_intake import QueryIntake
 
 
 class RetrievalPlanner:
@@ -22,17 +23,14 @@ class RetrievalPlanner:
 
         query_hash = QueryIntake.compute_query_hash(query)
 
-        # Determine topics based on intent
         topic_ids = self._select_topics(
             intent, rl_decisions.get("expand_topics", False)
         )
 
-        # Determine retrieval strategy
         use_cache = rl_decisions.get("use_cache", True)
         use_ann = rl_decisions.get("use_ann", True)
         expand_topics = rl_decisions.get("expand_topics", False)
 
-        # Determine chunk count based on intent
         max_chunks = self._determine_chunk_count(intent)
 
         plan = RetrievalPlan(
@@ -45,8 +43,8 @@ class RetrievalPlanner:
             timestamp=datetime.now(),
         )
 
-        self.logger.debug(
-            f"Created plan: topics={len(topic_ids)}, chunks={max_chunks}, cache={use_cache}"
+        self.logger.info(
+            f"Created plan: topics={list(topic_ids)}, max_chunks={max_chunks}, cache={use_cache}, ann={use_ann}"
         )
         return plan
 
@@ -54,28 +52,26 @@ class RetrievalPlanner:
         """Select topics based on intent"""
         from core.contracts.intent import IntentType
 
-        # Base topic selection
         if intent.intent_type == IntentType.FACTUAL:
-            base_count = 2
-        elif intent.intent_type == IntentType.ANALYTICAL:
             base_count = 3
-        elif intent.intent_type == IntentType.COMPARATIVE:
+        elif intent.intent_type == IntentType.ANALYTICAL:
             base_count = 4
+        elif intent.intent_type == IntentType.COMPARATIVE:
+            base_count = 5
         elif intent.intent_type == IntentType.PROCEDURAL:
             base_count = 3
         elif intent.intent_type == IntentType.EXPLORATORY:
-            base_count = 5
+            base_count = 6
         else:
-            base_count = 3
+            base_count = 5
 
-        # Expand if requested
         if expand:
             base_count = min(base_count + 2, self.num_topics)
 
-        # For initial plan, select first N topics
-        # In production, this would use query embedding similarity
-        topic_ids = set(range(min(base_count, self.num_topics)))
+        actual_count = min(base_count, self.num_topics)
+        topic_ids = set(range(actual_count))
 
+        self.logger.debug(f"Selected {len(topic_ids)} topics: {topic_ids}")
         return topic_ids
 
     def _determine_chunk_count(self, intent: Intent) -> int:

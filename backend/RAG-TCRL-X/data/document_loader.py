@@ -1,7 +1,9 @@
+import io
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional
-import io
+
 from logger import Logger
 
 
@@ -41,11 +43,12 @@ class TxtLoader(DocumentLoader):
         """Load text file"""
         self.logger.info(f"Loading TXT file: {filepath.name}")
 
+        metadata = self._extract_metadata(filepath)
+
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
-            # Try with different encoding
             with open(filepath, "r", encoding="latin-1") as f:
                 content = f.read()
 
@@ -53,20 +56,49 @@ class TxtLoader(DocumentLoader):
             self.logger.warning(f"File {filepath.name} is empty")
             return []
 
-        # Split by double newlines for document separation
         doc_texts = [text.strip() for text in content.split("\n\n") if text.strip()]
 
         documents = [
             Document(
                 text=text,
                 source=str(filepath),
-                metadata={"filename": filepath.name, "format": "txt"},
+                metadata={**metadata, "filename": filepath.name, "format": "txt"},
             )
             for text in doc_texts
         ]
 
         self.logger.info(f"Loaded {len(documents)} documents from {filepath.name}")
         return documents
+
+    def _extract_metadata(self, filepath: Path) -> dict:
+        """Extract metadata from file path and metadata.json"""
+        metadata = {}
+
+        try:
+            parts = filepath.relative_to(Path("data/datasets")).parts
+            if len(parts) >= 2:
+                metadata["corpus"] = parts[0]
+                metadata["topic_hint"] = parts[1] if len(parts) > 2 else parts[0]
+        except ValueError:
+            pass
+
+        metadata_file = filepath.parent / f"{filepath.stem}_metadata.json"
+        if not metadata_file.exists():
+            metadata_file = filepath.parent / "metadata.json"
+
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    file_metadata = json.load(f)
+                    for key, value in file_metadata.items():
+                        if key not in metadata:
+                            metadata[key] = value
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to load metadata from {metadata_file.name}: {e}"
+                )
+
+        return metadata
 
 
 class PdfLoader(DocumentLoader):
@@ -94,6 +126,8 @@ class PdfLoader(DocumentLoader):
         """Load PDF file"""
         self.logger.info(f"Loading PDF file: {filepath.name}")
 
+        metadata = self._extract_metadata(filepath)
+
         try:
             with open(filepath, "rb") as f:
                 pdf_reader = self.pypdf.PdfReader(f)
@@ -109,23 +143,26 @@ class PdfLoader(DocumentLoader):
                         text = page.extract_text()
 
                         if text and text.strip():
-                            # Split page into paragraphs
                             paragraphs = [
                                 p.strip() for p in text.split("\n\n") if p.strip()
                             ]
 
                             for para_idx, para in enumerate(paragraphs):
-                                if len(para) >= 50:  # Minimum paragraph length
+                                if len(para) >= 50:
+                                    doc_metadata = metadata.copy()
+                                    doc_metadata.update(
+                                        {
+                                            "filename": filepath.name,
+                                            "format": "pdf",
+                                            "page": page_num + 1,
+                                            "paragraph": para_idx + 1,
+                                        }
+                                    )
                                     documents.append(
                                         Document(
                                             text=para,
                                             source=str(filepath),
-                                            metadata={
-                                                "filename": filepath.name,
-                                                "format": "pdf",
-                                                "page": page_num + 1,
-                                                "paragraph": para_idx + 1,
-                                            },
+                                            metadata=doc_metadata,
                                         )
                                     )
                     except Exception as e:
@@ -142,6 +179,38 @@ class PdfLoader(DocumentLoader):
         except Exception as e:
             self.logger.error(f"Failed to load PDF {filepath.name}: {e}")
             raise RuntimeError(f"PDF loading failed: {e}")
+
+    def _extract_metadata(self, filepath: Path) -> dict:
+        """Extract metadata from file path and metadata.json"""
+        metadata = {}
+
+        try:
+            parts = filepath.relative_to(Path("data/datasets")).parts
+            if len(parts) >= 1:
+                metadata["corpus"] = parts[0]
+            if len(parts) >= 2:
+                metadata["topic_hint"] = parts[1]
+        except ValueError:
+            pass
+
+        metadata_file = filepath.parent / f"{filepath.stem}_metadata.json"
+
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    file_metadata = json.load(f)
+                    for key, value in file_metadata.items():
+                        if key not in metadata:
+                            metadata[key] = value
+                self.logger.debug(f"Loaded metadata for {filepath.name}")
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to load metadata from {metadata_file.name}: {e}"
+                )
+        else:
+            self.logger.debug(f"No metadata file found for {filepath.name}")
+
+        return metadata
 
 
 class DocxLoader(DocumentLoader):
@@ -169,6 +238,8 @@ class DocxLoader(DocumentLoader):
         """Load DOCX file"""
         self.logger.info(f"Loading DOCX file: {filepath.name}")
 
+        metadata = self._extract_metadata(filepath)
+
         try:
             doc = self.docx.Document(filepath)
 
@@ -181,17 +252,17 @@ class DocxLoader(DocumentLoader):
             for para_idx, paragraph in enumerate(doc.paragraphs):
                 text = paragraph.text.strip()
 
-                if text and len(text) >= 50:  # Minimum paragraph length
+                if text and len(text) >= 50:
+                    doc_metadata = metadata.copy()
+                    doc_metadata.update(
+                        {
+                            "filename": filepath.name,
+                            "format": "docx",
+                            "paragraph": para_idx + 1,
+                        }
+                    )
                     documents.append(
-                        Document(
-                            text=text,
-                            source=str(filepath),
-                            metadata={
-                                "filename": filepath.name,
-                                "format": "docx",
-                                "paragraph": para_idx + 1,
-                            },
-                        )
+                        Document(text=text, source=str(filepath), metadata=doc_metadata)
                     )
 
             self.logger.info(f"Loaded {len(documents)} documents from {filepath.name}")
@@ -200,6 +271,37 @@ class DocxLoader(DocumentLoader):
         except Exception as e:
             self.logger.error(f"Failed to load DOCX {filepath.name}: {e}")
             raise RuntimeError(f"DOCX loading failed: {e}")
+
+    def _extract_metadata(self, filepath: Path) -> dict:
+        """Extract metadata from file path and metadata.json"""
+        metadata = {}
+
+        try:
+            parts = filepath.relative_to(Path("data/datasets")).parts
+            if len(parts) >= 1:
+                metadata["corpus"] = parts[0]
+            if len(parts) >= 2:
+                metadata["topic_hint"] = parts[1]
+        except ValueError:
+            pass
+
+        metadata_file = filepath.parent / f"{filepath.stem}_metadata.json"
+        if not metadata_file.exists():
+            metadata_file = filepath.parent / "metadata.json"
+
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    file_metadata = json.load(f)
+                    for key, value in file_metadata.items():
+                        if key not in metadata:
+                            metadata[key] = value
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to load metadata from {metadata_file.name}: {e}"
+                )
+
+        return metadata
 
 
 class DocumentLoaderFactory:
