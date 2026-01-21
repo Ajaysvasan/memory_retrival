@@ -20,9 +20,6 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ... rest of your imports
-
-
 # adding all the packages so that I can import what I want to use
 module_dir = os.path.join(os.path.dirname(__file__))
 sys.path.append(module_dir)
@@ -172,14 +169,24 @@ def query(query: UserQuery):
 
         response = pipeline.process(query.query)
         # I still need cache hit , accuracy , retrieved chunks and cache hit
-        print(response["answer"])
-        return {
-            "answer": response["answer"],
-            "evidence_score": response["evidence_score"],
-            "latency": response["latency_ms"],
-            "cacheHit": response["from_cache"],
-            "retrievedChunks": response["num_chunks"],
-        }
+        # check the status of the response if it is success then return the output
+        # if it is other than success i.e refused or erorr then return what the message is
+        if response["status"] == "success":
+            return {
+                "answer": response["answer"],
+                "evidence_score": response["evidence_score"],
+                "latency": response["latency_ms"],
+                "cacheHit": response["from_cache"],
+                "retrievedChunks": response["num_chunks"],
+            }
+        elif response["status"] == "refused":
+            return {"answer": response["reason"], "latency": response["latency_ms"]}
+        else:
+            return {
+                "answer": f"The following error occured {response.get('error', 'Unknown error')}",
+                "latency": response["latency_ms"],
+            }
+
     except Exception as e:
         print(e)
         raise HTTPException(
@@ -192,4 +199,7 @@ if __name__ == "__main__":
     import uvicorn
 
     # This runs the server if you type `python main.py`
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except KeyboardInterrupt:
+        pipeline.shutdown()
