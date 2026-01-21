@@ -26,7 +26,6 @@ export interface ChatResponse {
 export const chatService = {
   async sendMessage(query: string): Promise<ChatResponse> {
     try {
-      console.log(query);
       const token = authService.getToken();
       const startTime = Date.now();
 
@@ -41,7 +40,9 @@ export const chatService = {
         }
       );
 
-      const latency = Date.now() - startTime;
+      console.log(response);
+
+      const latency = response.data.latency;
 
       // Extract metrics from response
       const metrics: ChatMetrics = {
