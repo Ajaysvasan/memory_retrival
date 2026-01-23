@@ -1,9 +1,0 @@
-from dataclasses import dataclass, field
-from typing import Dict, Any
-
-@dataclass
-class RetrievedDoc:
-    doc_id: str
-    content: str
-    retrieval_score: float
-    metadata: Dict[str, Any] = field(default_factory=dict)

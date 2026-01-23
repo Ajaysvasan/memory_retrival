@@ -1,0 +1,11 @@
+# Test-Bench Requirements
+numpy
+sentence-transformers
+torch
+rank-bm25
+pypdf
+requests
+beautifulsoup4
+reportlab
+wikipedia-api
+scikit-learn

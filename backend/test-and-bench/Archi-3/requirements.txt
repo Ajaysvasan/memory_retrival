@@ -1,4 +1,0 @@
-numpy
-torch
-sentence-transformers
-rank-bm25
