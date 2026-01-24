@@ -5,6 +5,7 @@ import logging
 import sys
 from pathlib import Path
 
+from config import Config
 from orchestrator import TestBenchOrchestrator
 from output_formatter import format_output
 from scraper_runner import run_scraper
@@ -23,7 +24,8 @@ def main():
     logger.info("=" * 80)
 
     # Determine data directory
-    default_data_dir = Path(__file__).parent / "data" / "datasets" / "wikipedia_general"
+
+    default_data_dir = Config.DATASET_DIR
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "--force-scrape":

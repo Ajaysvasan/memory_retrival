@@ -2,6 +2,8 @@
 # which is such a pain
 import os
 import sys
+import threading
+import time
 
 # this note is for self
 # You shouldn't have chose to do this
@@ -13,10 +15,13 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 2. Get the path to the 'RAG_TCRL_X' folder
 rag_dir = os.path.join(backend_dir, "RAG_TCRL_X")
+test_bench = os.path.join(backend_dir, "test-bench")
 
 # 3. Add BOTH to sys.path
+
+sys.path.insert(0, rag_dir)
 sys.path.append(backend_dir)  # Allows "from RAG_TCRL_X import ..."
-sys.path.append(rag_dir)  # Allows "from config import ..." (Fixes your error)
+sys.path.append(test_bench)
 # --- PATH SETUP END ---
 
 # Now your imports will work without changing the inner code
