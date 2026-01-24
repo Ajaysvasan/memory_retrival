@@ -34,13 +34,15 @@ function MetricsPanel({ currentMetrics, averageMetrics, totalMessages }: Metrics
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white">
+      {/* Sticky Header */}
+      <div className="sticky top-0 p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white shrink-0 z-10">
         <h2 className="text-xl font-bold m-0">Performance Metrics</h2>
         <span className="bg-white/20 px-3 py-1 rounded-xl text-sm font-semibold">
           {totalMessages} queries
         </span>
       </div>
 
+      {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {currentMetrics ? (
           <>

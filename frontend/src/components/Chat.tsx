@@ -107,8 +107,8 @@ function Chat() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white py-4 shadow-md sticky top-0 z-[100]">
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+      <header className="bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white py-4 shadow-md shrink-0">
         <div className="max-w-full mx-auto px-4 lg:px-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-0">
           <div className="flex flex-col gap-1">
             <h1 className="text-xl lg:text-2xl font-bold">RAG System Chat</h1>
@@ -137,8 +137,9 @@ function Chat() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-full h-[calc(100vh-80px)] min-h-0">
-        <div className="flex-1 flex flex-col bg-white lg:border-r border-gray-200 min-w-0 min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col bg-white lg:border-r border-gray-200 overflow-hidden">
           <ChatInterface
             messages={messages}
             isLoading={isLoading}
@@ -147,7 +148,8 @@ function Chat() {
           />
         </div>
 
-        <div className="w-full lg:w-[400px] bg-white lg:border-l border-t lg:border-t-0 border-gray-200 overflow-y-auto flex flex-col max-h-[300px] lg:max-h-none">
+        {/* Metrics Panel */}
+        <div className="w-full lg:w-[400px] flex flex-col bg-white lg:border-l border-t lg:border-t-0 border-gray-200 overflow-hidden">
           <MetricsPanel
             currentMetrics={currentMetrics}
             averageMetrics={averageMetrics}
