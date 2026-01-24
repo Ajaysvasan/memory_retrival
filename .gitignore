@@ -14,3 +14,4 @@ datasets/
 *.npy
 *.pt
 faiss_indexes
+todo.txt

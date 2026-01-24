@@ -3,6 +3,10 @@
 import os
 import sys
 
+# this note is for self
+# You shouldn't have chose to do this
+
+
 # --- PATH SETUP START ---
 # 1. Get the path to the 'backend' folder
 backend_dir = os.path.dirname(os.path.abspath(__file__))
