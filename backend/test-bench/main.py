@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Main entry point for test-bench"""
-import sys
+
 import logging
+import sys
 from pathlib import Path
-from scraper_runner import run_scraper
+
 from orchestrator import TestBenchOrchestrator
 from output_formatter import format_output
+from scraper_runner import run_scraper
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,10 @@ def main():
     logger.info("=" * 80)
     logger.info("TEST-BENCH RAG SYSTEM")
     logger.info("=" * 80)
-    
+
     # Determine data directory
     default_data_dir = Path(__file__).parent / "data" / "datasets" / "wikipedia_general"
-    
+
     if len(sys.argv) > 1:
         if sys.argv[1] == "--force-scrape":
             logger.info("Force scraping enabled...")
@@ -40,12 +41,12 @@ def main():
         else:
             logger.info(f"Using existing data at {default_data_dir}")
             data_dir = default_data_dir
-    
+
     # Verify data exists
     if not data_dir.exists():
         logger.error(f"Data directory not found: {data_dir}")
         sys.exit(1)
-    
+
     pdf_files = list(data_dir.rglob("*.pdf"))
     if not pdf_files:
         logger.warning("No PDF files found. Running scraper...")
@@ -54,10 +55,10 @@ def main():
         if not pdf_files:
             logger.error("Scraper did not generate any PDF files.")
             sys.exit(1)
-    
+
     logger.info(f"Data directory: {data_dir}")
     logger.info(f"Found {len(pdf_files)} PDF files")
-    
+
     # Initialize orchestrator
     try:
         orchestrator = TestBenchOrchestrator(data_dir)
@@ -67,30 +68,30 @@ def main():
     except Exception as e:
         logger.error(f"Failed to train architectures: {e}", exc_info=True)
         sys.exit(1)
-    
+
     # Interactive query loop
     logger.info("\n" + "=" * 80)
     logger.info("Ready to process queries. Type 'exit' or 'quit' to stop.")
     logger.info("=" * 80 + "\n")
-    
+
     while True:
         try:
             query = input("Enter your query: ").strip()
-            
+
             if not query:
                 continue
-            
-            if query.lower() in ['exit', 'quit', 'q']:
+
+            if query.lower() in ["exit", "quit", "q"]:
                 logger.info("Exiting...")
                 break
-            
+
             # Process query through all architectures
             results = orchestrator.process_query(query)
-            
+
             # Format and print output
             output = format_output(results)
             print("\n" + output)
-            
+
         except KeyboardInterrupt:
             logger.info("\nExiting...")
             break

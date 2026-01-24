@@ -19,7 +19,7 @@ from orchestration.phase_a_orchestrator import PhaseAOrchestrator
 from orchestration.pipeline import Pipeline
 
 
-def Model(query_text: str):
+def Model(query_text: str = ""):
 
     # Initialize logger first
     logger = Logger().get_logger("Main")
@@ -130,6 +130,8 @@ def Model(query_text: str):
         logger.info("=" * 80 + "\n")
 
         while True:
+            if query_text == "":
+                query_text = input("Enter the query: ")
             try:
                 if query_text.lower() in ["quit", "exit", "q"]:
                     break
@@ -138,8 +140,7 @@ def Model(query_text: str):
                     continue
 
                 response = pipeline.process(query_text)
-                # print_response(response)
-                print(response["answer"])
+                print_response(response)
 
             except KeyboardInterrupt:
                 logger.info("\nInterrupted by user")
