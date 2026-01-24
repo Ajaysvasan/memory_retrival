@@ -1,9 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
 import Home from './components/Home';
-import Auth from './components/Auth';
 import Chat from './components/Chat';
-import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
@@ -12,23 +9,12 @@ function App() {
   try {
     return (
       <ErrorBoundary>
-        <AuthProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/auth/login" element={<Auth />} />
-              <Route path="/auth/register" element={<Auth />} />
-              <Route
-                path="/chat"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </Router>
-        </AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/chat" element={<Chat />} />
+          </Routes>
+        </Router>
       </ErrorBoundary>
     );
   } catch (error) {

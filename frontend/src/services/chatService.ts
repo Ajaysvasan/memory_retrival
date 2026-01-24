@@ -1,5 +1,4 @@
 import axios from "axios";
-import { authService } from "./authService";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -26,7 +25,6 @@ export interface ChatResponse {
 export const chatService = {
   async sendMessage(query: string): Promise<ChatResponse> {
     try {
-      const token = authService.getToken();
       const startTime = Date.now();
 
       const response = await axios.post(
@@ -34,7 +32,6 @@ export const chatService = {
         { query },
         {
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
         }

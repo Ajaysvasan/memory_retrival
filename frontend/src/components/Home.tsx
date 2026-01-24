@@ -42,16 +42,10 @@ function Home() {
             </div>
             <div className="flex gap-2 md:gap-3 items-center w-full md:w-auto justify-center md:justify-end">
               <button
-                className="px-4 md:px-6 py-2 md:py-2.5 text-xs md:text-sm font-semibold uppercase tracking-wide rounded-lg bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-500/30 transition-all w-full md:w-auto"
-                onClick={() => navigate('/auth/login')}
+                className="px-5 md:px-7 py-2.5 md:py-3 text-xs md:text-sm font-semibold uppercase tracking-wide rounded-lg bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-500/30 transition-all w-full md:w-auto"
+                onClick={() => navigate('/chat')}
               >
-                Login
-              </button>
-              <button
-                className="px-4 md:px-6 py-2 md:py-2.5 text-xs md:text-sm font-semibold uppercase tracking-wide rounded-lg bg-white text-sky-700 border-2 border-sky-500 hover:bg-sky-500 hover:text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-500/30 transition-all w-full md:w-auto"
-                onClick={() => navigate('/auth/register')}
-              >
-                Register
+                Get Started
               </button>
             </div>
           </div>

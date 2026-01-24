@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { chatService, type ChatMessage, type ChatMetrics } from '../services/chatService';
 import ChatInterface from './ChatInterface';
 import MetricsPanel from './MetricsPanel';
 
 function Chat() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentMetrics, setCurrentMetrics] = useState<ChatMetrics | null>(null);
@@ -17,13 +15,6 @@ function Chat() {
     accuracy: 0,
   });
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    // Redirect to login if not authenticated
-    if (!user) {
-      navigate('/auth/login');
-    }
-  }, [user, navigate]);
 
   useEffect(() => {
     // Scroll to bottom when new message arrives
@@ -97,22 +88,12 @@ function Chat() {
     });
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
-
-  if (!user) {
-    return null;
-  }
-
   return (
     <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
       <header className="bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white py-4 shadow-md shrink-0">
         <div className="max-w-full mx-auto px-4 lg:px-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-0">
           <div className="flex flex-col gap-1">
-            <h1 className="text-xl lg:text-2xl font-bold">RAG System Chat</h1>
-            <span className="text-xs lg:text-sm opacity-90">Welcome, {user.name}</span>
+            <h1 className="text-xl lg:text-2xl font-bold">Memory Retrival</h1>
           </div>
           <div className="flex gap-2 lg:gap-3 items-center w-full lg:w-auto justify-end">
             <button
@@ -126,12 +107,6 @@ function Chat() {
               onClick={() => navigate('/')}
             >
               Home
-            </button>
-            <button
-              className="px-3 lg:px-4 py-1.5 lg:py-2 bg-red-500/30 text-white border border-red-500/50 rounded-md text-xs lg:text-sm font-medium transition-all hover:bg-red-500/50 hover:-translate-y-0.5"
-              onClick={handleLogout}
-            >
-              Logout
             </button>
           </div>
         </div>
