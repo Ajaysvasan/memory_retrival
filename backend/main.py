@@ -34,14 +34,12 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from test_bench.orchestrator import TestBenchOrchestrator
+
 # adding all the packages so that I can import what I want to use
 module_dir = os.path.join(os.path.dirname(__file__))
 print(module_dir)
 sys.path.append(module_dir)
-try:
-    from test_bench.orchestrator import TestBenchOrchestrator
-except:
-    print("Import error. resolve that")
 from RAG_TCRL_X.config import Config
 from RAG_TCRL_X.core.lifecycle.system_gate import SystemGate
 from RAG_TCRL_X.data.initialization import IntegrityValidator, SystemInitializer
@@ -184,16 +182,26 @@ except Exception as e:
         f"The following exception occured while trying to initialize the model {e}"
     )
 
+# initialization of all the other three models
+print("Testing if this initialization works")
+testBench = TestBenchOrchestrator()
+testBench.train_all()
+print("it worked")
+
+# I didn't expect that to work lol
+
+try:
+    testBench.arch1.query("what is heart attack")
+except:
+    print("Exception in testBench try block training")
+
+
 # So what I am going to do is the
 # take all the four architectures and give them separate files for each each one of them to train and also I am going to define the dataset
 # in   way that all the four architectures can see it instead of those dataset being local to the files
 # why am I doing like this so that I can introduce a C++ layer to lazy load the models (since loading all the four model into the RAM is like killing my own pc)
 # so I will lazy laod the models and create 4 separate threads i.e one thread for each model to get the reuslts in that way I don't need to wait for one model complete it's execution first
 # Followed by another
-
-# user -> query -> frontend -> backend (recives the query) -> cpp layer (lazy loads the models and assigns each model script with it's own thread) -> model generates output
-# that output is passed to  the frontend
-# these are the things that I am going to work on and hopefully it should work
 
 
 @app.post("/api/chat/")
@@ -231,8 +239,11 @@ def query(query: UserQuery):
 if __name__ == "__main__":
     import uvicorn
 
-    # This runs the server if you type `python main.py`
+    # # This runs the server if you type `python main.py`
     try:
         uvicorn.run(app, host="0.0.0.0", port=8000)
+        # It workeddddd wow
+        print(testBench.arch1.query("what is heart attack? "))
     except KeyboardInterrupt:
         pipeline.shutdown()
+        pass
