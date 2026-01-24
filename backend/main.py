@@ -1,5 +1,10 @@
 # this is going to contain only the route that is neccessary for the model services that is only one route as I don't want to re write the entire vibe coded code base
 # which is such a pain
+
+# Note to self
+# even in the future don't attempt to refactor this code base
+
+
 import os
 import sys
 import threading
@@ -15,7 +20,7 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 2. Get the path to the 'RAG_TCRL_X' folder
 rag_dir = os.path.join(backend_dir, "RAG_TCRL_X")
-test_bench = os.path.join(backend_dir, "test-bench")
+test_bench = os.path.join(backend_dir, "test_bench")
 
 # 3. Add BOTH to sys.path
 
@@ -31,7 +36,12 @@ from pydantic import BaseModel
 
 # adding all the packages so that I can import what I want to use
 module_dir = os.path.join(os.path.dirname(__file__))
+print(module_dir)
 sys.path.append(module_dir)
+try:
+    from test_bench.orchestrator import TestBenchOrchestrator
+except:
+    print("Import error. resolve that")
 from RAG_TCRL_X.config import Config
 from RAG_TCRL_X.core.lifecycle.system_gate import SystemGate
 from RAG_TCRL_X.data.initialization import IntegrityValidator, SystemInitializer
