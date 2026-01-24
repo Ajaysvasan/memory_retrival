@@ -107,8 +107,8 @@ function Chat() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      <header className="bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white py-4 shadow-md sticky top-0 z-[100]">
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <header className="bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white py-4 shadow-md sticky top-0 z-[100]">
         <div className="max-w-full mx-auto px-4 lg:px-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-0">
           <div className="flex flex-col gap-1">
             <h1 className="text-xl lg:text-2xl font-bold">RAG System Chat</h1>

@@ -42,7 +42,7 @@ function ChatInterface({ messages, isLoading, onSendMessage, messagesEndRef }: C
             >
               <div
                 className={`max-w-[70%] px-5 py-4 rounded-xl shadow-sm ${message.role === 'user'
-                  ? 'bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white rounded-br-sm'
+                  ? 'bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white rounded-br-sm'
                   : 'bg-white text-gray-700 border border-gray-200 rounded-bl-sm'
                   }`}
               >
@@ -64,9 +64,9 @@ function ChatInterface({ messages, isLoading, onSendMessage, messagesEndRef }: C
                 <span className="font-semibold uppercase tracking-wide">RAG Assistant</span>
               </div>
               <div className="flex gap-2 py-2">
-                <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-[typing_1.4s_infinite_ease-in-out]"></span>
-                <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-[typing_1.4s_infinite_ease-in-out] [animation-delay:0.2s]"></span>
-                <span className="w-2 h-2 rounded-full bg-fuchsia-500 animate-[typing_1.4s_infinite_ease-in-out] [animation-delay:0.4s]"></span>
+                <span className="w-2 h-2 rounded-full bg-sky-500 animate-[typing_1.4s_infinite_ease-in-out]"></span>
+                <span className="w-2 h-2 rounded-full bg-sky-500 animate-[typing_1.4s_infinite_ease-in-out] [animation-delay:0.2s]"></span>
+                <span className="w-2 h-2 rounded-full bg-sky-500 animate-[typing_1.4s_infinite_ease-in-out] [animation-delay:0.4s]"></span>
               </div>
             </div>
           </div>
@@ -78,7 +78,7 @@ function ChatInterface({ messages, isLoading, onSendMessage, messagesEndRef }: C
         <div className="flex gap-3 items-center max-w-full">
           <input
             type="text"
-            className="flex-1 px-5 py-3.5 border-2 border-gray-200 rounded-xl text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-3 focus:ring-fuchsia-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="flex-1 px-5 py-3.5 border-2 border-gray-200 rounded-xl text-base transition-all focus:outline-none focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
             placeholder="Type your message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -86,7 +86,7 @@ function ChatInterface({ messages, isLoading, onSendMessage, messagesEndRef }: C
           />
           <button
             type="submit"
-            className="px-5 py-3.5 bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white rounded-xl flex items-center justify-center transition-all min-w-[50px] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-fuchsia-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-3.5 bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white rounded-xl flex items-center justify-center transition-all min-w-[50px] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={!input.trim() || isLoading}
           >
             <svg

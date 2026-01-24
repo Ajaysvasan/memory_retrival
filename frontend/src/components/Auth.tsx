@@ -64,7 +64,7 @@ function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-fuchsia-500 to-pink-500 p-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-sky-600 p-8">
       <div className="bg-white/95 backdrop-blur-lg rounded-3xl p-12 w-full max-w-md shadow-2xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2 text-gray-800">
@@ -96,7 +96,7 @@ function Auth() {
                 required
                 placeholder="Enter your full name"
                 disabled={loading}
-                className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-3 focus:ring-fuchsia-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
           )}
@@ -114,7 +114,7 @@ function Auth() {
               required
               placeholder="Enter your email"
               disabled={loading}
-              className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-3 focus:ring-fuchsia-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -132,13 +132,13 @@ function Auth() {
               placeholder="Enter your password"
               disabled={loading}
               minLength={6}
-              className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-fuchsia-500 focus:ring-3 focus:ring-fuchsia-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="px-4 py-3.5 border-2 border-gray-200 rounded-lg text-base transition-all focus:outline-none focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
 
           <button
             type="submit"
-            className="px-4 py-4 bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white rounded-lg text-base font-semibold uppercase tracking-wide mt-2 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-fuchsia-500/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-4 py-4 bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white rounded-lg text-base font-semibold uppercase tracking-wide mt-2 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-sky-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={loading}
           >
             {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
@@ -150,7 +150,7 @@ function Auth() {
             {isLogin ? "Don't have an account? " : 'Already have an account? '}
             <button
               type="button"
-              className="bg-none border-none text-fuchsia-500 cursor-pointer font-semibold text-sm p-0 underline transition-colors hover:text-pink-500 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="bg-none border-none text-sky-600 cursor-pointer font-semibold text-sm p-0 underline transition-colors hover:text-sky-800 disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={switchMode}
               disabled={loading}
             >
@@ -162,7 +162,7 @@ function Auth() {
         <div className="mt-6 text-center">
           <button
             type="button"
-            className="bg-none border-none text-fuchsia-500 cursor-pointer text-sm py-2 transition-colors hover:text-pink-500 hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
+            className="bg-none border-none text-sky-600 cursor-pointer text-sm py-2 transition-colors hover:text-sky-800 hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={() => navigate('/')}
             disabled={loading}
           >

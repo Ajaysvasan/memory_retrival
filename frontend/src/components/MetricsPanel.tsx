@@ -34,7 +34,7 @@ function MetricsPanel({ currentMetrics, averageMetrics, totalMessages }: Metrics
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white">
+      <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-slate-900 via-blue-800 to-sky-500 text-white">
         <h2 className="text-xl font-bold m-0">Performance Metrics</h2>
         <span className="bg-white/20 px-3 py-1 rounded-xl text-sm font-semibold">
           {totalMessages} queries

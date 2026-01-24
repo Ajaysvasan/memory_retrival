@@ -42,7 +42,8 @@ export const chatService = {
 
       console.log(response);
 
-      const latency = response.data.latency;
+      const latency =
+        response.data.latency ?? response.data.metrics?.latency ?? Date.now() - startTime;
 
       // Extract metrics from response
       const metrics: ChatMetrics = {
@@ -50,7 +51,7 @@ export const chatService = {
           response.data.metrics?.confidence_score ||
           response.data.confidence_score ||
           0.85,
-        latency: response.data.metrics?.latency || latency,
+        latency,
         accuracy:
           response.data.metrics?.accuracy || response.data.accuracy || 0.9,
         retrievedChunks:
