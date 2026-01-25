@@ -9,7 +9,7 @@ class Config:
     # Paths
     BASE_DIR = Path(__file__).parent
     DATA_DIR = BASE_DIR / "data"
-    DATASET_DIR = DATA_DIR / "datasets"
+    DATASET_DIR = DATA_DIR / "datasets/wikipedia_general"
     EMBEDDINGS_PATH = DATA_DIR / "embeddings.npy"
     TOPICS_PATH = DATA_DIR / "topic_centroids.npy"
     FAISS_DIR = DATA_DIR / "faiss_indexes"
@@ -119,3 +119,8 @@ class Config:
                     dataset_files.append(filepath)
 
         return sorted(dataset_files)
+
+
+if __name__ == "__main__":
+    config = Config()
+    print(config.DATASET_DIR)

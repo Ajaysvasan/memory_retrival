@@ -35,6 +35,7 @@ sys.path.append(test_bench)
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from test_bench.orchestrator import TestBenchOrchestrator
 
 # adding all the packages so that I can import what I want to use
@@ -197,6 +198,7 @@ def query(query_text: UserQuery):
     overAllReponse = dict()
     try:
         response = pipeline.process(query_text.query)
+        print(f"Response from our architecture {response}")
         # I still need cache hit , accuracy , retrieved chunks and cache hit
         # check the status of the response if it is success then return the output
         # if it is other than success i.e refused or erorr then return what the message is

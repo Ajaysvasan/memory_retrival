@@ -130,8 +130,7 @@ def Model(query_text: str = ""):
         logger.info("=" * 80 + "\n")
 
         while True:
-            if query_text == "":
-                query_text = input("Enter the query: ")
+            query_text = input("Enter the query: ")
             try:
                 if query_text.lower() in ["quit", "exit", "q"]:
                     break
@@ -197,6 +196,6 @@ def print_response(response: dict):
 
 try:
     if __name__ == "__main__":
-        Model("hello world")
+        Model("")
 except:
     pass
