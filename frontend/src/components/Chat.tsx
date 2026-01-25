@@ -1,14 +1,26 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { chatService, type ChatMessage, type ChatMetrics } from '../services/chatService';
-import ChatInterface from './ChatInterface';
-import MetricsPanel from './MetricsPanel';
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  chatService,
+  type ChatMessage,
+  type ChatMetrics,
+} from "../services/chatService";
+import ChatInterface from "./ChatInterface";
+import MetricsPanel from "./MetricsPanel";
 
 function Chat() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentMetrics, setCurrentMetrics] = useState<ChatMetrics | null>(null);
+
+  const [ourRAGMessage, setourRAGMessage] = useState<ChatMessage[]>([]);
+  const [arch1Message, setArch1Message] = useState<ChatMessage[]>([]);
+
+  const [arch2Message, setArch2Message] = useState<ChatMessage[]>([]);
+  const [arch3Message, setArch3Message] = useState<ChatMessage[]>([]);
+  const [currentMetrics, setCurrentMetrics] = useState<ChatMetrics | null>(
+    null
+  );
   const [averageMetrics, setAverageMetrics] = useState<ChatMetrics>({
     confidenceScore: 0,
     latency: 0,
@@ -18,18 +30,27 @@ function Chat() {
 
   useEffect(() => {
     // Scroll to bottom when new message arrives
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
     // Calculate average metrics
     if (currentMetrics) {
-      const totalMessages = messages.filter(m => m.role === 'assistant').length;
+      const totalMessages = messages.filter(
+        (m) => m.role === "assistant"
+      ).length;
       if (totalMessages > 1) {
         setAverageMetrics((prev) => ({
-          confidenceScore: (prev.confidenceScore * (totalMessages - 1) + currentMetrics.confidenceScore) / totalMessages,
-          latency: (prev.latency * (totalMessages - 1) + currentMetrics.latency) / totalMessages,
-          accuracy: (prev.accuracy * (totalMessages - 1) + currentMetrics.accuracy) / totalMessages,
+          confidenceScore:
+            (prev.confidenceScore * (totalMessages - 1) +
+              currentMetrics.confidenceScore) /
+            totalMessages,
+          latency:
+            (prev.latency * (totalMessages - 1) + currentMetrics.latency) /
+            totalMessages,
+          accuracy:
+            (prev.accuracy * (totalMessages - 1) + currentMetrics.accuracy) /
+            totalMessages,
         }));
       } else {
         setAverageMetrics(currentMetrics);
@@ -43,7 +64,7 @@ function Chat() {
     // Add user message
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      role: 'user',
+      role: "user",
       content: content.trim(),
       timestamp: new Date(),
     };
@@ -53,23 +74,63 @@ function Chat() {
 
     try {
       const response = await chatService.sendMessage(content.trim());
+      console.warn(response);
 
       // Add assistant message
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.message,
+        role: "assistant",
+        content: response.model_one_answer,
         timestamp: new Date(),
       };
 
+      // Add assistant message
+      const ourRAG: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: response.model_one_answer,
+        timestamp: new Date(),
+      };
+      // Add assistant message
+      const arch1: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: response.model_two_answer,
+        timestamp: new Date(),
+      };
+
+      const arch2: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: response.model_three_answer,
+        timestamp: new Date(),
+      };
+
+      const arch3: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: response.model_three_answer,
+        timestamp: new Date(),
+      };
+
+      console.log(assistantMessage);
+
       setMessages((prev) => [...prev, assistantMessage]);
-      setCurrentMetrics(response.metrics);
+      setourRAGMessage((prev) => [...prev, ourRAG]);
+      setArch1Message((prev) => [...prev, arch1]);
+
+      setArch2Message((prev) => [...prev, arch2]);
+      setArch3Message((prev) => [...prev, arch3]);
+      console.log(ourRAG);
+      console.log(arch1);
+      console.log(arch2);
+      console.log(arch3);
     } catch (error: any) {
       // Add error message
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Error: ${error.message || 'Failed to get response'}`,
+        role: "assistant",
+        content: `Error: ${error.message || "Failed to get response"}`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -104,7 +165,7 @@ function Chat() {
             </button>
             <button
               className="px-3 lg:px-4 py-1.5 lg:py-2 bg-white/20 text-white border border-white/30 rounded-md text-xs lg:text-sm font-medium transition-all hover:bg-white/30 hover:-translate-y-0.5"
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
             >
               Home
             </button>
@@ -128,7 +189,9 @@ function Chat() {
           <MetricsPanel
             currentMetrics={currentMetrics}
             averageMetrics={averageMetrics}
-            totalMessages={messages.filter(m => m.role === 'assistant').length}
+            totalMessages={
+              messages.filter((m) => m.role === "assistant").length
+            }
           />
         </div>
       </div>
@@ -137,3 +200,4 @@ function Chat() {
 }
 
 export default Chat;
+

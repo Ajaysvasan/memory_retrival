@@ -35,7 +35,6 @@ sys.path.append(test_bench)
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
 from test_bench.orchestrator import TestBenchOrchestrator
 
 # adding all the packages so that I can import what I want to use
@@ -222,6 +221,7 @@ def query(query_text: UserQuery):
         response = testBench.arch3.query(query_text.query)
         overAllReponse["model_four_answer"] = response.output
         overAllReponse["model_four_latency"] = response.latency
+        overAllReponse["message"] = "WTF I should do now"
 
         return overAllReponse
     except Exception as e:

@@ -12,13 +12,21 @@ export interface ChatMessage {
 export interface ChatMetrics {
   confidenceScore: number;
   latency: number; // in milliseconds
-  accuracy: number;
+  accuracy?: number;
   retrievedChunks?: number;
   cacheHit?: boolean;
 }
 
+// Maybe I need to modify this
+// Here it is string
 export interface ChatResponse {
-  message: string;
+  model_one_answer?: string;
+  model_one_latency?: number;
+  model_two_answer?: string;
+  model_two_latency?: number;
+  model_three_answer?: string;
+  model_three_latency?: number;
+  message?: string;
   metrics: ChatMetrics;
 }
 
@@ -36,11 +44,13 @@ export const chatService = {
           },
         }
       );
-
+      // I was indeed correct
       console.log(response);
 
       const latency =
-        response.data.latency ?? response.data.metrics?.latency ?? Date.now() - startTime;
+        response.data.latency ??
+        response.data.metrics?.latency ??
+        Date.now() - startTime;
 
       // Extract metrics from response
       const metrics: ChatMetrics = {
@@ -59,10 +69,15 @@ export const chatService = {
 
       return {
         message:
-          response.data.message ||
+          response.data.model_two_answer ||
           response.data.response ||
           response.data.answer ||
           "Response received",
+        model_one_answer: response.data.model_one_answer,
+
+        model_two_answer: response.data.model_two_answer,
+
+        model_three_answer: response.data.model_three_answer,
         metrics,
       };
     } catch (error: any) {
