@@ -1,12 +1,13 @@
-// yea I am going to hard code some values
-// They left me with no option
 import { useState, useRef, useEffect } from "react";
 import type { FormEvent } from "react";
 import type { ChatMessage } from "../services/chatService";
-// If the response is string , why on earth here it is an array
-// Halluciation at it's peak
+
 interface ChatInterfaceProps {
   messages: ChatMessage[];
+  ourRAGMessages?: ChatMessage[];
+  arch1Messages?: ChatMessage[];
+  arch2Messages?: ChatMessage[];
+  arch3Messages?: ChatMessage[];
   isLoading: boolean;
   onSendMessage: (message: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
@@ -14,6 +15,10 @@ interface ChatInterfaceProps {
 
 function ChatInterface({
   messages,
+  ourRAGMessages,
+  arch1Messages,
+  arch2Messages,
+  arch3Messages,
   isLoading,
   onSendMessage,
   messagesEndRef,
@@ -51,13 +56,34 @@ function ChatInterface({
     WebkitOverflowScrolling: "touch" as const,
   };
 
+  // Helper function to combine messages properly
+  const combineMessages = (
+    userMessages: ChatMessage[],
+    assistantMessages: ChatMessage[]
+  ): ChatMessage[] => {
+    const combined: ChatMessage[] = [];
+    const maxLength = Math.max(userMessages.length, assistantMessages.length);
+
+    for (let i = 0; i < maxLength; i++) {
+      if (i < userMessages.length) {
+        combined.push(userMessages[i]);
+      }
+      if (i < assistantMessages.length) {
+        combined.push(assistantMessages[i]);
+      }
+    }
+
+    return combined;
+  };
+
   const renderMessages = (
     panelNumber: number,
     panelName: string,
+    messagesToShow: ChatMessage[],
     endRef?: React.RefObject<HTMLDivElement | null>
   ) => (
     <>
-      {messages.length === 0 ? (
+      {messagesToShow.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-gray-500 text-center p-4">
           <div className="text-5xl mb-4">💬</div>
           <h3 className="text-xl mb-2 text-gray-700 font-semibold">
@@ -67,7 +93,7 @@ function ChatInterface({
         </div>
       ) : (
         <>
-          {messages.map((message) => (
+          {messagesToShow.map((message) => (
             <div
               key={`${message.id}-${panelNumber}`}
               className={`flex mb-4 animate-[fadeIn_0.3s_ease-in] ${
@@ -134,8 +160,12 @@ function ChatInterface({
             className="flex-1 overflow-y-auto p-5 bg-gray-50 hide-scrollbar"
             style={scrollbarHideStyle}
           >
-            {renderMessages(1, "Our RAG")}
-            <div ref={messagesEndRef} />
+            {renderMessages(
+              1,
+              "Our RAG",
+              combineMessages(messages, ourRAGMessages || []),
+              messagesEndRef
+            )}
           </div>
         </div>
 
@@ -148,7 +178,12 @@ function ChatInterface({
             className="flex-1 overflow-y-auto p-5 bg-gray-50 hide-scrollbar"
             style={scrollbarHideStyle}
           >
-            {renderMessages(2, "Hybrid RAG", panel2EndRef)}
+            {renderMessages(
+              2,
+              "Hybrid RAG",
+              combineMessages(messages, arch1Messages || []),
+              panel2EndRef
+            )}
           </div>
         </div>
 
@@ -161,7 +196,12 @@ function ChatInterface({
             className="flex-1 overflow-y-auto p-5 bg-gray-50 hide-scrollbar"
             style={scrollbarHideStyle}
           >
-            {renderMessages(3, "FID RAG", panel3EndRef)}
+            {renderMessages(
+              3,
+              "FID RAG",
+              combineMessages(messages, arch2Messages || []),
+              panel3EndRef
+            )}
           </div>
         </div>
 
@@ -174,7 +214,12 @@ function ChatInterface({
             className="flex-1 overflow-y-auto p-5 bg-gray-50 hide-scrollbar"
             style={scrollbarHideStyle}
           >
-            {renderMessages(4, "Agentic RAG", panel4EndRef)}
+            {renderMessages(
+              4,
+              "Agentic RAG",
+              combineMessages(messages, arch3Messages || []),
+              panel4EndRef
+            )}
           </div>
         </div>
       </div>

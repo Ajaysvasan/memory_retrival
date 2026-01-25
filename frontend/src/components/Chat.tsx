@@ -15,7 +15,6 @@ function Chat() {
 
   const [ourRAGMessage, setourRAGMessage] = useState<ChatMessage[]>([]);
   const [arch1Message, setArch1Message] = useState<ChatMessage[]>([]);
-
   const [arch2Message, setArch2Message] = useState<ChatMessage[]>([]);
   const [arch3Message, setArch3Message] = useState<ChatMessage[]>([]);
   const [currentMetrics, setCurrentMetrics] = useState<ChatMetrics | null>(
@@ -76,64 +75,60 @@ function Chat() {
       const response = await chatService.sendMessage(content.trim());
       console.warn(response);
 
-      // Add assistant message
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response.model_one_answer,
-        timestamp: new Date(),
-      };
-
-      // Add assistant message
+      // Add assistant message for Our RAG
       const ourRAG: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: response.model_one_answer,
         timestamp: new Date(),
       };
-      // Add assistant message
+
+      // Add assistant message for Arch1
       const arch1: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         role: "assistant",
         content: response.model_two_answer,
         timestamp: new Date(),
       };
 
+      // Add assistant message for Arch2
       const arch2: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 3).toString(),
         role: "assistant",
         content: response.model_three_answer,
         timestamp: new Date(),
       };
 
+      // Add assistant message for Arch3
       const arch3: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 4).toString(),
         role: "assistant",
-        content: response.model_three_answer,
+        content: response.model_four_answer,
         timestamp: new Date(),
       };
 
-      console.log(assistantMessage);
-
-      setMessages((prev) => [...prev, assistantMessage]);
       setourRAGMessage((prev) => [...prev, ourRAG]);
       setArch1Message((prev) => [...prev, arch1]);
-
       setArch2Message((prev) => [...prev, arch2]);
       setArch3Message((prev) => [...prev, arch3]);
+
       console.log(ourRAG);
       console.log(arch1);
       console.log(arch2);
       console.log(arch3);
     } catch (error: any) {
-      // Add error message
+      // Add error message to all panels
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: `Error: ${error.message || "Failed to get response"}`,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+
+      setourRAGMessage((prev) => [...prev, errorMessage]);
+      setArch1Message((prev) => [...prev, errorMessage]);
+      setArch2Message((prev) => [...prev, errorMessage]);
+      setArch3Message((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +136,10 @@ function Chat() {
 
   const handleClearChat = () => {
     setMessages([]);
+    setourRAGMessage([]);
+    setArch1Message([]);
+    setArch2Message([]);
+    setArch3Message([]);
     setCurrentMetrics(null);
     setAverageMetrics({
       confidenceScore: 0,
@@ -178,6 +177,10 @@ function Chat() {
         <div className="flex-1 flex flex-col bg-white lg:border-r border-gray-200 overflow-hidden">
           <ChatInterface
             messages={messages}
+            ourRAGMessages={ourRAGMessage}
+            arch1Messages={arch1Message}
+            arch2Messages={arch2Message}
+            arch3Messages={arch3Message}
             isLoading={isLoading}
             onSendMessage={handleSendMessage}
             messagesEndRef={messagesEndRef}
@@ -200,4 +203,3 @@ function Chat() {
 }
 
 export default Chat;
-

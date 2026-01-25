@@ -26,6 +26,8 @@ export interface ChatResponse {
   model_two_latency?: number;
   model_three_answer?: string;
   model_three_latency?: number;
+  model_four_answer?: string;
+  model_four_latency?: number;
   message?: string;
   metrics: ChatMetrics;
 }
@@ -78,6 +80,7 @@ export const chatService = {
         model_two_answer: response.data.model_two_answer,
 
         model_three_answer: response.data.model_three_answer,
+        model_four_answer: response.data.model_four_answer,
         metrics,
       };
     } catch (error: any) {
