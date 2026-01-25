@@ -9,13 +9,13 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-export interface ChatMetrics {
+export type ChatMetrics = {
   confidenceScore: number;
-  latency: number; // in milliseconds
-  accuracy?: number;
-  retrievedChunks?: number;
+  latency: number;
+  accuracy: number;
   cacheHit?: boolean;
-}
+  retrievedChunks?: number;
+};
 
 // Maybe I need to modify this
 // Here it is string
