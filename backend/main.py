@@ -35,7 +35,6 @@ sys.path.append(test_bench)
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
 from test_bench.orchestrator import TestBenchOrchestrator
 
 # adding all the packages so that I can import what I want to use
@@ -66,10 +65,10 @@ app = FastAPI(title="Memory retrival model")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
