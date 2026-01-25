@@ -19,19 +19,14 @@ export type ChatMetrics = {
 
 // Maybe I need to modify this
 // Here it is string
-export interface ChatResponse {
-  model_one_answer?: string;
-  model_one_latency?: number;
-  model_two_answer?: string;
-  model_two_latency?: number;
-  model_three_answer?: string;
-  model_three_latency?: number;
-  model_four_answer?: string;
-  model_four_latency?: number;
-  message?: string;
-  metrics: ChatMetrics;
-}
 
+export type ChatResponse = {
+  model_one_answer: string;
+  model_two_answer: string;
+  model_three_answer: string;
+  model_four_answer: string;
+  metrics: ChatMetrics;
+};
 export const chatService = {
   async sendMessage(query: string): Promise<ChatResponse> {
     try {
@@ -70,11 +65,6 @@ export const chatService = {
       };
 
       return {
-        message:
-          response.data.model_two_answer ||
-          response.data.response ||
-          response.data.answer ||
-          "Response received",
         model_one_answer: response.data.model_one_answer,
 
         model_two_answer: response.data.model_two_answer,
@@ -99,19 +89,7 @@ export const chatService = {
 
   getResponse(query: string): ChatResponse {
     // Mock response for development/testing
-    const mockLatency = Math.random() * 500 + 200; // 200-700ms
-    const mockConfidence = Math.random() * 0.2 + 0.75; // 0.75-0.95
-    const mockAccuracy = Math.random() * 0.15 + 0.8; // 0.80-0.95
-
-    return {
-      message: `This is a mock response to your query: "${query}". The RAG system would process this query by retrieving relevant documents and generating a response based on the retrieved context.`,
-      metrics: {
-        confidenceScore: mockConfidence,
-        latency: mockLatency,
-        accuracy: mockAccuracy,
-        retrievedChunks: Math.floor(Math.random() * 5) + 3,
-        cacheHit: Math.random() > 0.7,
-      },
-    };
+    console.log(query);
+    throw new Error("Mock respone");
   },
 };
