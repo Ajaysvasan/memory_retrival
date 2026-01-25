@@ -10,6 +10,8 @@ import sys
 import threading
 import time
 
+from huggingface_hub import TextToSpeechEarlyStoppingEnum
+
 # this note is for self
 # You shouldn't have chose to do this
 
@@ -190,44 +192,38 @@ print("it worked")
 
 # I didn't expect that to work lol
 
-try:
-    testBench.arch1.query("what is heart attack")
-except:
-    print("Exception in testBench try block training")
-
-
-# So what I am going to do is the
-# take all the four architectures and give them separate files for each each one of them to train and also I am going to define the dataset
-# in   way that all the four architectures can see it instead of those dataset being local to the files
-# why am I doing like this so that I can introduce a C++ layer to lazy load the models (since loading all the four model into the RAM is like killing my own pc)
-# so I will lazy laod the models and create 4 separate threads i.e one thread for each model to get the reuslts in that way I don't need to wait for one model complete it's execution first
-# Followed by another
-
 
 @app.post("/api/chat/")
-def query(query: UserQuery):
+def query(query_text: UserQuery):
+    overAllReponse = dict()
     try:
-
-        response = pipeline.process(query.query)
+        response = pipeline.process(query_text.query)
         # I still need cache hit , accuracy , retrieved chunks and cache hit
         # check the status of the response if it is success then return the output
         # if it is other than success i.e refused or erorr then return what the message is
         if response["status"] == "success":
-            return {
-                "answer": response["answer"],
-                "evidence_score": response["evidence_score"],
-                "latency": response["latency_ms"],
-                "cacheHit": response["from_cache"],
-                "retrievedChunks": response["num_chunks"],
-            }
+            overAllReponse["model_one_answer"] = response["answer"]
+            overAllReponse["model_one_latency"] = response["latency_ms"]
         elif response["status"] == "refused":
-            return {"answer": response["reason"], "latency": response["latency_ms"]}
-        else:
-            return {
-                "answer": f"The following error occured {response.get('error', 'Unknown error')}",
-                "latency": response["latency_ms"],
-            }
+            overAllReponse["model_one_answer"] = response["reason"]
+            overAllReponse["model_one_latency"] = response["latency_ms"]
 
+        else:
+            overAllReponse["model_one_answer"] = (
+                f"The following error occured {response.get('error', 'Unknown error')}"
+            )
+            overAllReponse["model_one_latency"] = response["latency_ms"]
+        response = testBench.arch1.query(query_text.query)
+        overAllReponse["model_two_answer"] = response.output
+        overAllReponse["model_two_latency"] = response.latency
+        response = testBench.arch2.query(query_text.query)
+        overAllReponse["model_three_answer"] = response.output
+        overAllReponse["model_three_latency"] = response.latency
+        response = testBench.arch3.query(query_text.query)
+        overAllReponse["model_four_answer"] = response.output
+        overAllReponse["model_four_latency"] = response.latency
+
+        return overAllReponse
     except Exception as e:
         print(e)
         raise HTTPException(
@@ -243,7 +239,6 @@ if __name__ == "__main__":
     try:
         uvicorn.run(app, host="0.0.0.0", port=8000)
         # It workeddddd wow
-        print(testBench.arch1.query("what is heart attack? "))
     except KeyboardInterrupt:
         pipeline.shutdown()
         pass
