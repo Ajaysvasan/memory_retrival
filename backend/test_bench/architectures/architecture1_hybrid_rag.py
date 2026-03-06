@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from architectures.base import BaseRAGArchitecture
@@ -16,6 +15,7 @@ from bench_core.result import ArchitectureResult
 # Add utils to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.answer_generator import generate_answer
+from utils.sparse_backend import SparseRetrievalBackend
 
 
 class HybridRAGArchitecture(BaseRAGArchitecture):
@@ -25,7 +25,7 @@ class HybridRAGArchitecture(BaseRAGArchitecture):
         super().__init__("Hybrid Two-Stage RAG with Cross-Encoder Reranking")
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.vector_embeddings = {}
-        self.bm25_index = None
+        self.sparse_backend = None
         # Use a stronger embedding model for reranking
         # Cross-encoder requires separate package, so we use a better embedding model
         try:
@@ -45,9 +45,8 @@ class HybridRAGArchitecture(BaseRAGArchitecture):
         for doc, emb in zip(documents, embeddings):
             self.vector_embeddings[doc.doc_id] = emb
 
-        # Create BM25 index
-        tokenized_corpus = [doc.content.lower().split() for doc in documents]
-        self.bm25_index = BM25Okapi(tokenized_corpus)
+        # Create sparse retriever (rank-bm25 by default, pyserini if configured)
+        self.sparse_backend = SparseRetrievalBackend(documents)
 
         self.is_trained = True
 
@@ -69,8 +68,7 @@ class HybridRAGArchitecture(BaseRAGArchitecture):
                 vector_scores[doc_id] = similarity
 
             # BM25 scores
-            query_tokens = query.lower().split()
-            bm25_scores = self.bm25_index.get_scores(query_tokens)
+            bm25_scores = self.sparse_backend.get_scores(query)
 
             # Combine scores (60% vector, 40% BM25)
             combined_scores = {}

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from architectures.base import BaseRAGArchitecture
@@ -16,6 +15,7 @@ from bench_core.result import ArchitectureResult
 # Add utils to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.answer_generator import generate_answer
+from utils.sparse_backend import SparseRetrievalBackend
 
 
 class AgenticRAGArchitecture(BaseRAGArchitecture):
@@ -25,7 +25,7 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
         super().__init__("Agentic RAG (Tool-Orchestrated / Multi-Step RAG)")
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.vector_embeddings = {}
-        self.bm25_index = None
+        self.sparse_backend = None
         self.tools = {}
 
     def train(self, documents: List[Document]):
@@ -39,9 +39,8 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
         for doc, emb in zip(documents, embeddings):
             self.vector_embeddings[doc.doc_id] = emb
 
-        # Create BM25 index
-        tokenized_corpus = [doc.content.lower().split() for doc in documents]
-        self.bm25_index = BM25Okapi(tokenized_corpus)
+        # Create sparse retriever (rank-bm25 by default, pyserini if configured)
+        self.sparse_backend = SparseRetrievalBackend(documents)
 
         # Register tools
         self.tools = {
@@ -69,9 +68,8 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
         return [doc for doc in self.documents if doc.doc_id in [d[0] for d in top_docs]]
 
     def _bm25_search(self, query: str, top_k: int = 10) -> List[Document]:
-        """BM25 search tool"""
-        query_tokens = query.lower().split()
-        scores = self.bm25_index.get_scores(query_tokens)
+        """Sparse search tool (rank-bm25 or pyserini backend)"""
+        scores = self.sparse_backend.get_scores(query)
         top_indices = np.argsort(scores)[::-1][:top_k]
         return [self.documents[i] for i in top_indices]
 

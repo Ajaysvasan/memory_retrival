@@ -26,6 +26,7 @@ _A deterministic, explainable, and context-aware RAG system for real-world AI ap
 - [Prerequisites](#-prerequisites)
 - [Installation](#-installation)
 - [Usage](#-usage)
+- [Pyserini Sparse Retrieval (Optional)](#-pyserini-sparse-retrieval-optional)
 - [Technical Challenges](#-technical-challenges)
 - [How It Works](#-how-it-works)
 - [Performance](#-performance)
@@ -319,6 +320,56 @@ uvicorn main:app --reload
 ```bash
 npm run dev
 ```
+
+---
+
+## 🔎 Pyserini Sparse Retrieval (Optional)
+
+RAG-TCRL-X now supports an optional **pyserini-backed sparse retrieval path** for lexical BM25-style retrieval.
+
+### Setup
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+To enable pyserini as the sparse backend:
+
+```bash
+export SPARSE_RETRIEVER_BACKEND=pyserini
+```
+
+If `pyserini` is not available, the system automatically falls back to `rank-bm25`.
+
+### Indexing Workflow
+
+When sparse retrieval is initialized, the backend:
+
+1. Exports chunked corpus data as JSON (`id`, `contents`)
+2. Builds a Lucene index with `pyserini.index.lucene`
+3. Reuses that index for sparse retrieval during runtime
+
+### Retrieval Workflow
+
+At query time, retrieval can run in either mode:
+
+- **ANN mode** (`use_ann=True`): topic-aware FAISS search
+- **Sparse mode** (`use_ann=False`): pyserini BM25 over the Lucene index (or rank-bm25 fallback)
+
+Sparse hits are filtered by selected topics and then scored alongside existing pipeline steps.
+
+### Evaluation / Benchmark Workflow
+
+Use the test bench to evaluate retrieval behavior with pyserini enabled:
+
+```bash
+cd backend/test_bench
+export SPARSE_RETRIEVER_BACKEND=pyserini
+python main.py --skip-scrape
+```
+
+This keeps the benchmark workflow unchanged while swapping sparse retrieval backend.
 
 ---
 
