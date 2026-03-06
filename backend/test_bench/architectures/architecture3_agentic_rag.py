@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from architectures.base import BaseRAGArchitecture
+from architectures.bm25_backend import BM25Backend
 from bench_core.document import Document
 from bench_core.result import ArchitectureResult
 
@@ -25,7 +25,7 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
         super().__init__("Agentic RAG (Tool-Orchestrated / Multi-Step RAG)")
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.vector_embeddings = {}
-        self.bm25_index = None
+        self.bm25_backend = BM25Backend()
         self.tools = {}
 
     def train(self, documents: List[Document]):
@@ -40,8 +40,7 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
             self.vector_embeddings[doc.doc_id] = emb
 
         # Create BM25 index
-        tokenized_corpus = [doc.content.lower().split() for doc in documents]
-        self.bm25_index = BM25Okapi(tokenized_corpus)
+        self.bm25_backend.train(documents)
 
         # Register tools
         self.tools = {
@@ -70,10 +69,7 @@ class AgenticRAGArchitecture(BaseRAGArchitecture):
 
     def _bm25_search(self, query: str, top_k: int = 10) -> List[Document]:
         """BM25 search tool"""
-        query_tokens = query.lower().split()
-        scores = self.bm25_index.get_scores(query_tokens)
-        top_indices = np.argsort(scores)[::-1][:top_k]
-        return [self.documents[i] for i in top_indices]
+        return self.bm25_backend.top_documents(query, top_k=top_k)
 
     def _hybrid_search(self, query: str, top_k: int = 10) -> List[Document]:
         """Hybrid search tool"""

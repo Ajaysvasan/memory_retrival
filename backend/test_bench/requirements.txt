@@ -3,6 +3,7 @@ numpy
 sentence-transformers
 torch
 rank-bm25
+pyserini
 pypdf
 requests
 beautifulsoup4

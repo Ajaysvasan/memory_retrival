@@ -8,6 +8,7 @@ Complete test-bench system for comparing three RAG architectures against your ne
    - Stage 1: Hybrid retrieval (60% vector similarity + 40% BM25)
    - Stage 2: Cross-encoder reranking
    - Returns top 3 documents
+   - BM25 backend can be switched between `pyserini` (default) and `rank-bm25`
 
 2. **Fusion-in-Decoder (FiD) RAG Architecture**
    - Hybrid retrieval (70% vector + 30% BM25)
@@ -22,9 +23,26 @@ Complete test-bench system for comparing three RAG architectures against your ne
 ## Setup
 
 ```bash
-cd backend/test-bench
+cd backend/test_bench
 pip install -r requirements.txt
 ```
+
+### BM25 backend selection
+
+```bash
+# Default backend
+export TEST_BENCH_BM25_BACKEND=pyserini
+
+# Optional fallback backend
+# export TEST_BENCH_BM25_BACKEND=rank_bm25
+
+# Optional override for where the Lucene index is created
+# export TEST_BENCH_PYSERINI_INDEX_DIR=./data/indices/pyserini
+```
+
+By default, each architecture builds a Lucene index from the benchmark corpus and uses Pyserini for BM25 scoring. If Pyserini is unavailable, the benchmark falls back to `rank-bm25` automatically.
+
+> Note: Pyserini depends on Java 21 in addition to Python.
 
 ## Usage
 
@@ -36,6 +54,39 @@ python main.py
 - `python main.py` - Automatically scrapes if data doesn't exist
 - `python main.py --force-scrape` - Force re-scraping
 - `python main.py --skip-scrape` - Skip scraping, use existing data
+
+### Pyserini indexing and retrieval example
+
+This is the same indexing/retrieval flow used internally when `TEST_BENCH_BM25_BACKEND=pyserini`:
+
+```bash
+# 1) Build a Lucene index from JSONL docs
+python -m pyserini.index.lucene \
+  --collection JsonCollection \
+  --input /path/to/jsonl-dir \
+  --index /path/to/lucene-index \
+  --generator DefaultLuceneDocumentGenerator \
+  --threads 1 \
+  --storePositions --storeDocvectors --storeRaw
+
+# 2) Run sparse retrieval
+python - <<'PY'
+from pyserini.search.lucene import LuceneSearcher
+
+searcher = LuceneSearcher('/path/to/lucene-index')
+for hit in searcher.search('what is retrieval augmented generation?', k=5):
+    print(hit.docid, hit.score)
+PY
+```
+
+### Benchmark / evaluation workflow with Pyserini
+
+```bash
+export TEST_BENCH_BM25_BACKEND=pyserini
+python main.py --skip-scrape
+```
+
+The benchmark will train all three architectures with Pyserini-backed BM25 retrieval and print comparative latency/accuracy metrics.
 
 ## Output Format
 

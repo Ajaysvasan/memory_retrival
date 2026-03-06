@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from architectures.base import BaseRAGArchitecture
+from architectures.bm25_backend import BM25Backend
 from bench_core.document import Document
 from bench_core.result import ArchitectureResult
 
@@ -25,7 +25,7 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
         super().__init__("Fusion-in-Decoder (FiD) RAG Architecture")
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.vector_embeddings = {}
-        self.bm25_index = None
+        self.bm25_backend = BM25Backend()
         self.fusion_encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
     def train(self, documents: List[Document]):
@@ -44,9 +44,8 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
         print(f"[FiD] Created {len(self.vector_embeddings)} vector embeddings")
 
         # Create BM25 index
-        tokenized_corpus = [doc.content.lower().split() for doc in documents]
-        self.bm25_index = BM25Okapi(tokenized_corpus)
-        print(f"[FiD] BM25 index created")
+        self.bm25_backend.train(documents)
+        print(f"[FiD] BM25 backend: {self.bm25_backend.active_backend}")
 
         self.is_trained = True
         print(f"[FiD] Training complete")
@@ -82,9 +81,7 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
 
             # BM25 scores
             print(f"[FiD] Calculating BM25 scores...")
-            query_tokens = query.lower().split()
-            print(f"[FiD] Query tokens: {query_tokens}")
-            bm25_scores = self.bm25_index.get_scores(query_tokens)
+            bm25_scores = self.bm25_backend.score_all(query)
             print(
                 f"[FiD] BM25 scores: min={np.min(bm25_scores):.4f}, max={np.max(bm25_scores):.4f}, mean={np.mean(bm25_scores):.4f}"
             )
