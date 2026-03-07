@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import List
 
 import numpy as np
-from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 from architectures.base import BaseRAGArchitecture
@@ -16,6 +15,7 @@ from bench_core.result import ArchitectureResult
 # Add utils to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.answer_generator import generate_answer
+from utils.sparse_backend import SparseRetrievalBackend
 
 
 class FiDRAGArchitecture(BaseRAGArchitecture):
@@ -25,7 +25,7 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
         super().__init__("Fusion-in-Decoder (FiD) RAG Architecture")
         self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         self.vector_embeddings = {}
-        self.bm25_index = None
+        self.sparse_backend = None
         self.fusion_encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
     def train(self, documents: List[Document]):
@@ -43,10 +43,9 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
 
         print(f"[FiD] Created {len(self.vector_embeddings)} vector embeddings")
 
-        # Create BM25 index
-        tokenized_corpus = [doc.content.lower().split() for doc in documents]
-        self.bm25_index = BM25Okapi(tokenized_corpus)
-        print(f"[FiD] BM25 index created")
+        # Create sparse retriever (rank-bm25 by default, pyserini if configured)
+        self.sparse_backend = SparseRetrievalBackend(documents)
+        print(f"[FiD] Sparse retriever backend created: {self.sparse_backend.backend}")
 
         self.is_trained = True
         print(f"[FiD] Training complete")
@@ -82,9 +81,8 @@ class FiDRAGArchitecture(BaseRAGArchitecture):
 
             # BM25 scores
             print(f"[FiD] Calculating BM25 scores...")
-            query_tokens = query.lower().split()
-            print(f"[FiD] Query tokens: {query_tokens}")
-            bm25_scores = self.bm25_index.get_scores(query_tokens)
+            print(f"[FiD] Query tokens: {query.lower().split()}")
+            bm25_scores = self.sparse_backend.get_scores(query)
             print(
                 f"[FiD] BM25 scores: min={np.min(bm25_scores):.4f}, max={np.max(bm25_scores):.4f}, mean={np.mean(bm25_scores):.4f}"
             )

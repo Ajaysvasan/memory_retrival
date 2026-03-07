@@ -22,9 +22,21 @@ Complete test-bench system for comparing three RAG architectures against your ne
 ## Setup
 
 ```bash
-cd backend/test-bench
+cd backend/test_bench
 pip install -r requirements.txt
 ```
+
+## Sparse Retrieval Backend (rank-bm25 / pyserini)
+
+By default, test-bench sparse retrieval uses `rank-bm25`.
+
+To switch to pyserini:
+
+```bash
+export SPARSE_RETRIEVER_BACKEND=pyserini
+```
+
+When enabled, each architecture builds a local Lucene index from the same benchmark corpus and uses pyserini BM25 scores in the hybrid retrieval stage.
 
 ## Usage
 

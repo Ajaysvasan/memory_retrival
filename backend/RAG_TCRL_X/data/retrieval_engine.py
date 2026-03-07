@@ -1,7 +1,5 @@
 import time
-from typing import List, Set
-
-import numpy as np
+from typing import List
 
 from core.contracts.query import Query
 from core.contracts.retrieval_plan import RetrievalPlan
@@ -9,6 +7,7 @@ from core.contracts.retrieve_result import RetrieveResult
 from core.contracts.retrieved_chunk import RetrievedChunk
 from data.embedding_engine import EmbeddingEngine
 from data.faiss_indexer import FAISSIndexer
+from data.sparse_retriever import SparseRetriever
 from logger import Logger
 
 
@@ -25,10 +24,17 @@ class RetrievalEngine:
         self.faiss_indexer = faiss_indexer
         self.chunks = {chunk.chunk_id: chunk for chunk in chunks}
         self.logger = Logger().get_logger("Retrieval")
+        self.sparse_retriever = SparseRetriever(
+            chunks=chunks,
+            topic_chunk_maps=self.faiss_indexer.topic_chunk_maps,
+        )
 
         self.logger.info(f"RetrievalEngine initialized with {len(self.chunks)} chunks")
         self.logger.info(
             f"FAISS indexes loaded: {len(self.faiss_indexer.indexes)} topics"
+        )
+        self.logger.info(
+            f"Sparse retriever backend: {self.sparse_retriever.backend_name}"
         )
 
     def retrieve(self, query: Query, plan: RetrievalPlan) -> RetrieveResult:
@@ -49,13 +55,23 @@ class RetrievalEngine:
             )
             self.logger.info(f"FAISS search returned {len(results)} results")
         else:
-            self.logger.warning("Non-ANN retrieval not implemented, using ANN")
-            results = self.faiss_indexer.search(
-                query_embedding, list(plan.topic_ids), plan.max_chunks
+            results = self.sparse_retriever.search(
+                query=query.text,
+                topic_ids=list(plan.topic_ids),
+                k=plan.max_chunks,
+            )
+            self.logger.info(
+                f"Sparse search ({self.sparse_retriever.backend_name}) returned {len(results)} results"
             )
 
+            if not results:
+                self.logger.warning("Sparse retrieval returned 0 results, falling back to ANN")
+                results = self.faiss_indexer.search(
+                    query_embedding, list(plan.topic_ids), plan.max_chunks
+                )
+
         if not results:
-            self.logger.error("CRITICAL: FAISS search returned 0 results")
+            self.logger.error("CRITICAL: retrieval returned 0 results")
             retrieval_time_ms = (time.time() - start_time) * 1000
             return RetrieveResult(
                 chunks=tuple(),
